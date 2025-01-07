@@ -9,7 +9,6 @@ import {
   ImageBackground,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-// import { useNavigation } from "@react-navigation/native";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { firestore, auth } from "./firebaseConfig";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -17,8 +16,7 @@ import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import LoadingScreen from "./LoadingScreen";
 
-const LoginScreen = (navigation) => {
-  // const navigation = useNavigation();
+const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isConnected, setIsConnected] = useState(false);
