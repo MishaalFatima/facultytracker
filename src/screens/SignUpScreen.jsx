@@ -60,7 +60,7 @@ const SignUpScreen = ({ navigation }) => {
 
     const phoneRegex = /^\+923\d{9}$/;
     const sessionRegex = /^\d{4}-\d{4}$/;
-    if (!isConnected) {
+    if(!isConnected) {
           Alert.alert("No Internet Connection", "Please check your internet connection.");
           setLoading(false); 
           return;
