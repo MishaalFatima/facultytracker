@@ -1,27 +1,14 @@
-import {
-  ImageBackground,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
-  SafeAreaView,
-  Image,
-} from "react-native";
+import React, { useEffect , useState } from "react";
+import { ImageBackground, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, SafeAreaView, Image } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
 import { firestore, storage } from "./firebaseConfig";
 import { doc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  updateProfile,
-} from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import LoadingScreen from "./LoadingScreen";
+import NetInfo from "@react-native-community/netinfo"; 
 
 const SignUpScreen = ({ navigation }) => {
   const [name, setName] = useState("");
@@ -37,10 +24,23 @@ const SignUpScreen = ({ navigation }) => {
   const [password, setPassword] = useState("");
   const [gender, setGender] = useState("");
   const [FacultyType, setFacultyType] = useState("");
-
   const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsConnected(state.isConnected);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isConnected]);
 
   const handleSignUp = async () => {
+    setLoading(true);
     const requiredFields = [
       name,
       email,
@@ -60,25 +60,34 @@ const SignUpScreen = ({ navigation }) => {
 
     const phoneRegex = /^\+923\d{9}$/;
     const sessionRegex = /^\d{4}-\d{4}$/;
+    if (!isConnected) {
+          Alert.alert("No Internet Connection", "Please check your internet connection.");
+          setLoading(false); 
+          return;
+        } 
 
-    if (requiredFields.includes("")) {
+    else if (requiredFields.includes("")) {
       Alert.alert("Error", "Please fill in all required fields.");
+      setLoading(false);
       return;
     }
   
     else if (!email.endsWith("@gmail.com")) {
       Alert.alert("Error", "Email must end with @gmail.com.");
+      setLoading(false);
       return;
     }
   
     else if (!phoneRegex.test(phoneNumber)) {
       Alert.alert("Error", "Phone number must start with +923 and have 13 digits.");
+      setLoading(false);
       return;
     }
   
     else if (role === "CR/GR") {
       if (!sessionRegex.test(session)) {
         Alert.alert("Error", "Session must be in the format YYYY-YYYY (e.g., 2021-2025).");
+        setLoading(false);
         return;
       }
     }
@@ -95,10 +104,12 @@ const SignUpScreen = ({ navigation }) => {
       await addData(user.uid);
   
       Alert.alert("Sign Up Successful", `Welcome ${name}`);
-      resetForm();
     } catch (error) {
-      console.error("Error signing up: ", error);
+      console.log("Error signing up: ", error);
       Alert.alert("Error", error.message);
+    }finally{
+      resetForm();
+      setLoading(false);
     }
   };
   
@@ -191,11 +202,16 @@ const SignUpScreen = ({ navigation }) => {
 
 
     } catch (error) {
-      console.error("Error adding document: ", error);
+      console.log("Error adding document: ", error);
       Alert.alert("Error", "Failed to save data. Please try again.");
     }
   };
 
+  while (loading) {
+    return <LoadingScreen />; // Show the loading screen when loading state is true
+  }
+  
+  
   return (
     <SafeAreaView style={styles.safeArea}>
       <ImageBackground
@@ -548,6 +564,8 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginRight: 5,
+    size:24,
+    color:"#08422d"
   },
   uploadButton: {
     backgroundColor: "#08422d",

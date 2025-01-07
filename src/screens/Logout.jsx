@@ -1,27 +1,48 @@
-import React from "react";
+import React, { useState } from "react";
 import { Alert, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { FontAwesome } from "@expo/vector-icons";
-import { signOut } from "firebase/auth"; // Importing signOut from the modular SDK
-import { auth } from "./firebaseConfig"; // Import the auth instance from your firebase config
+import { signOut } from "firebase/auth";
+import {
+  query,
+  where,
+  getDocs,
+  collection,
+  updateDoc,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { auth } from "./firebaseConfig";
+import LoadingScreen from "./LoadingScreen";
 
 const Logout = () => {
+  const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
 
   const handleLogout = async () => {
+    setLoading(true);
+
     try {
-      await signOut(auth); // Using signOut from the modular SDK
+      // Log the user out
+      await signOut(auth);
       Alert.alert("Logged out successfully");
 
-      // Reset navigation to login screen
+      // Reset navigation to the login screen
       navigation.reset({
         index: 0,
-        routes: [{ name: "Login" }], // Navigate to 'Login' screen after logout
+        routes: [{ name: "Login" }],
       });
     } catch (error) {
       Alert.alert("Error", "Failed to log out");
+      console.log("Failed to log out:", error);
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return <LoadingScreen />; // Show the loading screen when the loading state is true
+  }
 
   return (
     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>

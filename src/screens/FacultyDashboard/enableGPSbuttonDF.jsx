@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { View, Button, StyleSheet, Alert } from 'react-native';
 import * as Location from 'expo-location';
+import LoadingScreen from "../LoadingScreen";
 
 
 const EnableGPSButtonFD = () => {
 
+  const [loading, setLoading] = useState(false);
+
   const enableLocation = async () => {
+    
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Denied', 'You need to allow location permissions.');
@@ -22,11 +26,16 @@ const EnableGPSButtonFD = () => {
             console.log("Location is turned on");
           } catch (error) {
             console.log("Error fetching location", error);
+          } finally{
+            setLoading(false);
           }
     } else {
       Alert.alert('Location Enabled', 'Location services are already enabled.');
     }
   };
+  if (loading) {
+    return <LoadingScreen />; // Show the loading screen when loading state is true
+  }
 
   return (
     <View style={styles.statusContainer}>

@@ -10,8 +10,9 @@ import SignUpScreen from "./src/screens/SignUpScreen";
 import CRGRDashboard from "./src/screens/CRGRDashboardScreen";
 import FacultyDashboard from "./src/screens/FacultyDashboard/FacultyDashboard";
 import AdminDashboard from "./src/screens/AdminDashboard";
-import PrincipalDashboard from "./src/screens/PrincipalDashboardScreen";
-import Availability from "./src/screens/Availability";
+import PrincipalDashboard from "./src/screens/Principaldashboard/PrincipalDashboardScreen";
+import FacultyList from "./src/screens/Principaldashboard/FacultyList";
+import AvailabilityReport from "./src/screens/AvailabilityReport";
 
 const Stack = createStackNavigator();
 
@@ -62,7 +63,8 @@ export default function App() {
         <Stack.Screen name="CRGRDashboard" component={CRGRDashboard} />
         <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
         <Stack.Screen name="PrincipalDashboard" component={PrincipalDashboard} />
-        <Stack.Screen name="Availability" component={Availability} />
+        <Stack.Screen name="AvailabilityReport" component={AvailabilityReport} />
+        <Stack.Screen name="FacultyList" component={FacultyList} />        
       </Stack.Navigator>
     </NavigationContainer>
   );

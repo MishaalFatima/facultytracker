@@ -2,13 +2,13 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { MaterialIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from "@react-navigation/native";
-import Logout from './Logout';
+import Logout from '../Logout';
 
 const PrincipalDashboardScreen = () => {
     const navigation = useNavigation();
 
     const handleAvailabilityReport = () => {
-        navigation.navigate("Availability");
+        navigation.navigate("FacultyList");
       };
     return (
         <ScrollView contentContainerStyle={styles.container}>

@@ -9,18 +9,20 @@ import {
   ImageBackground,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { useNavigation } from "@react-navigation/native";
+// import { useNavigation } from "@react-navigation/native";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { firestore, auth } from "./firebaseConfig";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import NetInfo from "@react-native-community/netinfo"; 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import LoadingScreen from "./LoadingScreen";
 
-const LoginScreen = () => {
-  const navigation = useNavigation();
+const LoginScreen = (navigation) => {
+  // const navigation = useNavigation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -30,20 +32,28 @@ const LoginScreen = () => {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [isConnected]);
 
   const handleLogin = () => {
+    setLoading(true); 
     if (!email || !password) {
       Alert.alert("Error", "Please fill in all fields");
+      setLoading(false); 
+      return;
     } else if (!isConnected) {
       Alert.alert("No Internet Connection", "Please check your internet connection.");
+      setLoading(false); 
+      return;
     } else {
       if (!email.endsWith("@gmail.com")) {
             Alert.alert("Error", "Email must end with @gmail.com.");
+            setLoading(false); 
             return;
           }
-      loginUser();
-    }
+          else{
+            loginUser();
+          }
+        }
   };
 
   const handleSignUp = () => {
@@ -76,37 +86,48 @@ const LoginScreen = () => {
                 navigation.reset({ index: 0, routes: [{ name: "FacultyDashboard" }] });
               }
               Alert.alert("Login Successful", `Welcome Respected ${userData.role}`);
+              setLoading(false); 
               break;
             case "CR/GR":
               navigation.reset({ index: 0, routes: [{ name: "CRGRDashboard" }] });
               Alert.alert("Login Successful", `Welcome Respected ${userData.role}`);
+              setLoading(false); 
               break;
             case "Principal":
               navigation.reset({ index: 0, routes: [{ name: "PrincipalDashboard" }] });
               Alert.alert("Login Successful", `Welcome Respected ${userData.role}`);
+              setLoading(false); 
               break;
             case "Admin":
               navigation.reset({ index: 0, routes: [{ name: "AdminDashboard" }] });
               Alert.alert("Login Successful", `Welcome Respected ${userData.role}`);
+              setLoading(false); 
               break;
             default:
               Alert.alert("Error", "Unknown user type.");
+              setLoading(false); 
               break;
           }
   
-          setEmail("");
-          setPassword("");
+          
         });
       } else {
         Alert.alert("Error", "Invalid email or password");
+        setLoading(false); 
       }
     } catch (error) {
       console.log("Error logging in: ", error);
       Alert.alert("Login Failed", error.message);
+      setLoading(false); 
+    }finally {
+      setEmail("");
+      setPassword("");
     }
   };
-  
-  
+
+  while (loading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <ImageBackground
