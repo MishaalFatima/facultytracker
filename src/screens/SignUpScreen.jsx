@@ -102,7 +102,6 @@ const SignUpScreen = ({ navigation }) => {
       });
   
       await addData(user.uid);
-  
       Alert.alert("Sign Up Successful", `Welcome ${name}`);
     } catch (error) {
       console.log("Error signing up: ", error);
@@ -147,6 +146,8 @@ const SignUpScreen = ({ navigation }) => {
 
     if (!result.canceled) {
       setImage(result.assets[0].uri);
+      console.log("Image selected:", result.assets[0].uri);
+    } else {
       console.log("User cancelled image selection");
     }
   };
