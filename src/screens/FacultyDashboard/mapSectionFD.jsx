@@ -25,10 +25,10 @@ const MapSectionFD = () => {
   const [creationTime, setCreationTime] = useState(null);
 
   const universityCoordinates = {
-    latitude: 32.29194,
-    longitude: 72.27361,
-    // latitude: 32.2843941,
-    // longitude: 72.2914299,
+    // latitude: 32.29194,
+    // longitude: 72.27361,
+    latitude: 32.4241202,
+    longitude: 74.1132001,
     radius: 0.005,
   };
 

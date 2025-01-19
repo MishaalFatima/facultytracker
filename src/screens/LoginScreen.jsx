@@ -71,6 +71,7 @@ const LoginScreen = ({ navigation }) => {
   
           if (!userData.role) {
             Alert.alert("User role not defined. Contact administrator.");
+            setLoading(false); 
             return;
           }
   
