@@ -7,10 +7,13 @@ import {
   updateDoc,
   collection,
   doc,
+  getDocs,
+  query,
+  where,
   serverTimestamp,
 } from "firebase/firestore";
 import { firestore } from "../firebaseConfig";
-import { getAuth } from "firebase/auth"; // Import Firebase Auth to get the current user
+import { getAuth } from "firebase/auth";
 
 const MapSectionFD = () => {
   const [location, setLocation] = useState(null);
@@ -21,14 +24,10 @@ const MapSectionFD = () => {
     longitudeDelta: 0.005,
   });
   const [availability, setAvailability] = useState(null);
-  const [documentRef, setDocumentRef] = useState(null); // Stores the Firestore document reference
-  const [creationTime, setCreationTime] = useState(null);
 
   const universityCoordinates = {
-    // latitude: 32.29194,
-    // longitude: 72.27361,
-    latitude: 32.4241202,
-    longitude: 74.1132001,
+    latitude: 32.29194,
+    longitude: 72.27361,
     radius: 0.005,
   };
 
@@ -64,77 +63,73 @@ const MapSectionFD = () => {
     return distance <= universityCoordinates.radius;
   };
 
-  const saveLocationToFirestore = async (coords, isAvailable) => {
+  const handleDocument = async (coords, isAvailable) => {
     const auth = getAuth();
     const currentUser = auth.currentUser;
-
+  
     if (!currentUser) {
       console.error("User not authenticated");
       return;
     }
-
+  
     try {
-      if (documentRef) {
-        // Update existing document
-        await updateDoc(doc(firestore, "facultyAvailability", documentRef.id), {
+      // Query for documents without `endTime`
+       const q = query(
+              collection(firestore, "facultyAvailability"),
+              where("userId", "==", currentUser.uid),
+              orderBy("creationTime", "desc"),
+              limit(1)
+            );
+      const querySnapshot = await getDocs(q);
+  
+      if (!querySnapshot.empty) {
+        // Found an active document
+        const activeDoc = querySnapshot.docs[0];
+        const activeDocRef = activeDoc.ref;
+  
+        if (isAvailable) {
+          // User is now in campus; close the active document
+          const activeDuration = Math.round(
+            (Date.now() - activeDoc.data().creationTime.toMillis()) / 1000
+          );
+          await updateDoc(activeDocRef, {
+            activeDuration,
+            endTime: serverTimestamp(),
+          });
+        } else {
+          // User is not in campus; update the duration
+          const activeDuration = Math.round(
+            (Date.now() - activeDoc.data().creationTime.toMillis()) / 1000
+          );
+          await updateDoc(activeDocRef, {
+            activeDuration,
+          });
+        }
+      } else {
+        // No active document found, create a new one
+        await addDoc(collection(firestore, "facultyAvailability"), {
+          userId: currentUser.uid,
           latitude: coords.latitude,
           longitude: coords.longitude,
           availability: isAvailable ? "Available" : "Unavailable",
-          timestamp: serverTimestamp(), // Update the timestamp
+          creationTime: serverTimestamp(),
         });
-      } else {
-        // Create a new document
-        const docRef = await addDoc(
-          collection(firestore, "facultyAvailability"),
-          {
-            userId: currentUser.uid,
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            availability: isAvailable ? "Available" : "Unavailable",
-            creationTime: serverTimestamp(),
-          }
-        );
-        setDocumentRef(docRef); // Save the document reference
-        setCreationTime(Date.now()); // Save the creation time locally
       }
     } catch (error) {
-      console.log("Error saving location to Firestore:", error);
+      console.log("Error handling document:", error);
     }
   };
-
-  const updateDocumentDuration = async () => {
-    if (documentRef) {
-      const activeDuration = Math.round((Date.now() - creationTime) / 1000); // Duration in seconds
-      try {
-        await updateDoc(doc(firestore, "facultyAvailability", documentRef.id), {
-          activeDuration, // Store the duration
-          endTime: serverTimestamp(), // Save the end time
-        });
-        setDocumentRef(null); // Reset the document reference
-        setCreationTime(null); // Reset the creation time
-      } catch (error) {
-        console.error("Error updating document duration:", error);
-      }
-    }
-  };
-
+  
   useEffect(() => {
     if (availability !== null) {
-      if (!documentRef) {
-        // Create a new document if there isn't an active one
-        saveLocationToFirestore(location, availability === "Available");
-      } else {
-        // Close the previous document if status changes
-        updateDocumentDuration();
-        saveLocationToFirestore(location, availability === "Available");
-      }
+      handleDocument(location, availability === "Available");
     }
   }, [availability]);
 
   useEffect(() => {
     fetchLocation();
-    const interval = setInterval(fetchLocation, 5000); // Update every 5 seconds
-    return () => clearInterval(interval); // Cleanup interval on component unmount
+    const interval = setInterval(fetchLocation, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
