@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Callout  } from "react-native-maps";
 import * as Location from "expo-location";
 import {
-  addDoc,
-  updateDoc,
-  collection,
-  doc,
-  getDocs,
   query,
   where,
+  getDocs,
+  collection,
+  updateDoc,
+  addDoc,
   serverTimestamp,
+  orderBy,
+  limit,
 } from "firebase/firestore";
 import { firestore } from "../firebaseConfig";
 import { getAuth } from "firebase/auth";
@@ -23,11 +24,13 @@ const MapSectionFD = () => {
     latitudeDelta: 0.005,
     longitudeDelta: 0.005,
   });
-  const [availability, setAvailability] = useState(null);
+  const [availability, setAvailability] = useState("Unavailable");
 
   const universityCoordinates = {
-    latitude: 32.29194,
-    longitude: 72.27361,
+    // latitude: 32.29194,
+    // longitude: 72.27361,
+    latitude: 32.424165,
+    longitude: 74.1134659,
     radius: 0.005,
   };
 
@@ -66,63 +69,59 @@ const MapSectionFD = () => {
   const handleDocument = async (coords, isAvailable) => {
     const auth = getAuth();
     const currentUser = auth.currentUser;
-  
+
     if (!currentUser) {
       console.error("User not authenticated");
       return;
     }
-  
+
     try {
-      // Query for documents without `endTime`
-       const q = query(
-              collection(firestore, "facultyAvailability"),
-              where("userId", "==", currentUser.uid),
-              orderBy("creationTime", "desc"),
-              limit(1)
-            );
+      // Query for the most recent document for the user
+      const q = query(
+        collection(firestore, "facultyAvailability"),
+        where("userId", "==", currentUser.uid),
+        orderBy("creationTime", "desc"),
+        limit(1)
+      );
       const querySnapshot = await getDocs(q);
-  
+
       if (!querySnapshot.empty) {
-        // Found an active document
         const activeDoc = querySnapshot.docs[0];
         const activeDocRef = activeDoc.ref;
-  
-        if (isAvailable) {
-          // User is now in campus; close the active document
+
+        if (!activeDoc.data().endTime) {
           const activeDuration = Math.round(
             (Date.now() - activeDoc.data().creationTime.toMillis()) / 1000
           );
+          // Close the previous document with endTime and activeDuration
           await updateDoc(activeDocRef, {
             activeDuration,
             endTime: serverTimestamp(),
           });
-        } else {
-          // User is not in campus; update the duration
-          const activeDuration = Math.round(
-            (Date.now() - activeDoc.data().creationTime.toMillis()) / 1000
-          );
-          await updateDoc(activeDocRef, {
-            activeDuration,
-          });
         }
-      } else {
-        // No active document found, create a new one
-        await addDoc(collection(firestore, "facultyAvailability"), {
-          userId: currentUser.uid,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          availability: isAvailable ? "Available" : "Unavailable",
-          creationTime: serverTimestamp(),
-        });
       }
+
+      // Create a new document with the updated availability status
+      await addDoc(collection(firestore, "facultyAvailability"), {
+        userId: currentUser.uid,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        availability: isAvailable ? "Available" : "Unavailable",
+        creationTime: serverTimestamp(),
+      });
     } catch (error) {
       console.log("Error handling document:", error);
     }
   };
-  
+
+  const prevAvailabilityRef = useRef();
+
   useEffect(() => {
-    if (availability !== null) {
-      handleDocument(location, availability === "Available");
+    if (availability !== null && location) {
+      if (prevAvailabilityRef.current !== availability) {
+        handleDocument(location, availability === "Available");
+        prevAvailabilityRef.current = availability;
+      }
     }
   }, [availability]);
 
@@ -147,8 +146,14 @@ const MapSectionFD = () => {
               longitude: location.longitude,
             }}
             title="Current Location"
-            description={`Status: ${availability}`}
-          />
+            pinColor={availability === "Available" ? "green" : "red"}
+            style={{ borderRadius: 40,borderWidth: 5,borderColor: "#08422d" }}
+            
+          >
+            <Callout>
+              <Text>Status: {availability}</Text>
+            </Callout>
+          </Marker>
         )}
       </MapView>
     </View>
@@ -157,7 +162,7 @@ const MapSectionFD = () => {
 
 const styles = StyleSheet.create({
   mapContainer: {
-    height: 200,
+    height: 250,
     marginVertical: 20,
     backgroundColor: "#f0f0f0",
     borderRadius: 10,

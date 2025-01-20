@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { firestore } from "../firebaseConfig"; // Firebase configuration
 import { useNavigation } from "@react-navigation/native"; // Navigation hook
@@ -27,7 +27,7 @@ const FacultyList = () => {
         
         setFacultyData(data);
       } catch (error) {
-        console.error("Error fetching faculty data:", error);
+        console.log("Error fetching faculty data:", error);
       } finally {
         setLoading(false);
       }
@@ -50,11 +50,6 @@ const FacultyList = () => {
   if (loading) {
     return (
       <LoadingScreen/>
-
-      // <View style={styles.loadingContainer}>
-      //   <ActivityIndicator size="large" color="#0000ff" />
-      //   <Text>Loading faculty list...</Text>
-      // </View>
     );
   }
 
