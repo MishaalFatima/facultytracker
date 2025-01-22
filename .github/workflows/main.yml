@@ -30,7 +30,11 @@ jobs:
           distribution: 'zulu'
           java-version: '11'
 
-      # Step 3: Cache Gradle dependencies
+      # Step 3: Grant execute permissions for Gradle wrapper
+      - name: Grant execute permission for Gradle Wrapper
+        run: chmod +x ./gradlew
+
+      # Step 4: Cache Gradle dependencies
       - name: Cache Gradle packages
         uses: actions/cache@v3
         with:
@@ -39,11 +43,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # Step 4: Build the APK
+      # Step 5: Build the APK
       - name: Build APK
         run: ./gradlew assembleRelease  # Command to build APK
 
-      # Step 5: Upload the APK as an artifact
+      # Step 6: Upload the APK as an artifact
       - name: Upload APK
         uses: actions/upload-artifact@v3
         with:
