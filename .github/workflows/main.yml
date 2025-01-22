@@ -30,6 +30,10 @@ jobs:
 
       - name: Fix file permissions
         run: chmod -R +x .
+      
+      - name: Check Gradle wrapper permissions
+        run: ls -l ./gradlew
+
 
       - name: Cache Gradle packages
         uses: actions/cache@v3
