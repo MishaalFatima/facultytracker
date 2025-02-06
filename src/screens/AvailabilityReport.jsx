@@ -82,37 +82,6 @@ const AvailabilityReport = ({ route }) => {
 
   return (
     <ScrollView>
-      {/* Map Section */}
-      <View style={styles.mapContainer}>
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: data[0]?.location?.latitude || 37.78825,
-            longitude: data[0]?.location?.longitude || -122.4324,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }}
-        >
-          {data.map(
-            (item, index) =>
-              item.location && (
-                <Marker
-                  key={index}
-                  coordinate={{
-                    latitude: item.location.latitude,
-                    longitude: item.location.longitude,
-                  }}
-                  title={item.userName}
-                  description={`Available from: ${
-                    item.from ? new Date(item.from).toLocaleString() : "N/A"
-                  }`}
-                />
-              )
-          )}
-        </MapView>
-      </View>
-
-      {/* Table Section */}
       <View style={styles.table}>
         {/* Table Header */}
         <View style={styles.row}>
@@ -136,6 +105,7 @@ const AvailabilityReport = ({ route }) => {
                       day: "numeric",
                       hour: "numeric",
                       minute: "numeric",
+                      second: "numeric", 
                       hour12: true,
                     })
                   : "N/A"}
@@ -148,6 +118,7 @@ const AvailabilityReport = ({ route }) => {
                       day: "numeric",
                       hour: "numeric",
                       minute: "numeric",
+                      second: "numeric", 
                       hour12: true,
                     })
                   : "N/A"}

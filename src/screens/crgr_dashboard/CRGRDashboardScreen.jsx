@@ -1,12 +1,12 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { MaterialIcons, FontAwesome } from "@expo/vector-icons";
-import Logout from "./Logout"; // Importing the Logout component
+import Logout from "../Logout"; 
 
 const CRGRDashboardScreen = ({ navigation }) => {
 
   const handleUploadTimetable = () => {
-    console.log("Upload timetable clicked");
+    navigation.navigate('TimetableForm');
   };
 
   const handleReloadTimetable = () => {
@@ -14,7 +14,8 @@ const CRGRDashboardScreen = ({ navigation }) => {
   };
 
   const handleCaptureAttendance = () => {
-    console.log("Capture attendance clicked");
+    navigation.navigate('QRScannerScreen')
+  
   };
 
   const handleUpdateProfile = () => {
@@ -24,9 +25,10 @@ const CRGRDashboardScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>CR/GR Dashboard</Text>
-
       {/* Logout Button */}
       <Logout />
+
+      {/* <FaceRecognition  /> */}
 
       {/* Timetable Section */}
       <View style={styles.section}>

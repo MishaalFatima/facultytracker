@@ -7,12 +7,14 @@ import { auth } from "./src/screens/firebaseConfig";
 
 import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
-import CRGRDashboard from "./src/screens/CRGRDashboardScreen";
+import CRGRDashboard from "./src/screens/crgr_dashboard/CRGRDashboardScreen";
 import FacultyDashboard from "./src/screens/FacultyDashboard/FacultyDashboard";
 import AdminDashboard from "./src/screens/AdminDashboard";
 import PrincipalDashboard from "./src/screens/Principaldashboard/PrincipalDashboardScreen";
 import FacultyList from "./src/screens/Principaldashboard/FacultyList";
 import AvailabilityReport from "./src/screens/AvailabilityReport";
+import QRScannerScreen from './src/screens/crgr_dashboard/QRScannerScreen';
+import TimetableForm from "./src/screens/crgr_dashboard/TimetableForm";
 
 const Stack = createStackNavigator();
 
@@ -65,6 +67,8 @@ export default function App() {
         <Stack.Screen name="PrincipalDashboard" component={PrincipalDashboard} />
         <Stack.Screen name="AvailabilityReport" component={AvailabilityReport} />
         <Stack.Screen name="FacultyList" component={FacultyList} />        
+        <Stack.Screen name="QRScannerScreen" component={QRScannerScreen} />        
+        <Stack.Screen name="TimetableForm" component={TimetableForm} />        
       </Stack.Navigator>
     </NavigationContainer>
   );
