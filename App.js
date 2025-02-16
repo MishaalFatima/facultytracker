@@ -9,12 +9,17 @@ import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
 import CRGRDashboard from "./src/screens/crgr_dashboard/CRGRDashboardScreen";
 import FacultyDashboard from "./src/screens/FacultyDashboard/FacultyDashboard";
-import AdminDashboard from "./src/screens/AdminDashboard";
+import AdminDashboard from "./src/screens/AdminDashboard/AdminDashboard";
 import PrincipalDashboard from "./src/screens/Principaldashboard/PrincipalDashboardScreen";
 import FacultyList from "./src/screens/Principaldashboard/FacultyList";
+import FacultyTimetable from "./src/screens/FacultyDashboard/FacultyTimetable";
 import AvailabilityReport from "./src/screens/AvailabilityReport";
-import QRScannerScreen from './src/screens/crgr_dashboard/QRScannerScreen';
+import QRScannerScreen from "./src/screens/crgr_dashboard/QRScannerScreen";
+import DepaertmentList from "./src/screens/AdminDashboard/DepartmentsList";
+import CourseList from "./src/screens/AdminDashboard/CourseList";
+import ProgramList from "./src/screens/AdminDashboard/ProgramsList";
 import TimetableForm from "./src/screens/crgr_dashboard/TimetableForm";
+
 
 const Stack = createStackNavigator();
 
@@ -69,6 +74,10 @@ export default function App() {
         <Stack.Screen name="FacultyList" component={FacultyList} />        
         <Stack.Screen name="QRScannerScreen" component={QRScannerScreen} />        
         <Stack.Screen name="TimetableForm" component={TimetableForm} />        
+        <Stack.Screen name="DepaertmentList" component={DepaertmentList} />    
+        <Stack.Screen name="ProgramList" component={ProgramList} />    
+        <Stack.Screen name="CourseList" component={CourseList} />    
+        <Stack.Screen name="FacultyTimetable" component={FacultyTimetable} />    
       </Stack.Navigator>
     </NavigationContainer>
   );

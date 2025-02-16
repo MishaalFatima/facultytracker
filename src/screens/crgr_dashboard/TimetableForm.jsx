@@ -1,103 +1,280 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, SafeAreaView, ScrollView } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { firestore } from '../firebaseConfig';
-import { collection, addDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
+import { Picker } from "@react-native-picker/picker";
+import { firestore } from "../firebaseConfig";
+import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 
 const TimetableForm = () => {
-  const [department, setDepartment] = useState('');
-  const [semester, setSemester] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
-  const [course, setCourse] = useState('');
-  const [day, setDay] = useState('');
-  const [facultyName, setFacultyName] = useState('');
-  const [roomNo, setRoomNo] = useState('');
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [loadingDepartments, setLoadingDepartments] = useState(true);
+  const [programs, setPrograms] = useState([]);
+  const [selectedProgram, setSelectedProgram] = useState("");
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [semester, setSemester] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [course, setCourse] = useState("");
+  const [day, setDay] = useState("");
+  const [facultyName, setFacultyName] = useState("");
+  const [roomNumbers, setRoomNumbers] = useState([]);
+  const [selectedRoom, setSelectedRoom] = useState("");
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [shift, setShift] = useState("");
+  const [facultyList, setFacultyList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const timeSlots = {
+    Morning: {
+      start: ["8:30", "10:00", "11:30", "1:00"],
+      end: ["10:00", "11:30", "1:00", "2:30"],
+    },
+    Evening: {
+      start: ["2:30", "4:00", "5:30", "7:00"],
+      end: ["4:00", "5:30", "7:00", "8:30"],
+    },
+  };
+
+  useEffect(() => {
+    const fetchFacultyNames = async () => {
+      try {
+        const facultyQuery = query(
+          collection(firestore, "users"),
+          where("role", "==", "Faculty")
+        );
+        const facultySnapshot = await getDocs(facultyQuery);
+
+        const facultyData = facultySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name || "Unknown",
+        }));
+
+        setFacultyList(facultyData);
+      } catch (error) {
+        Alert.alert("Error", "Failed to fetch faculty names.");
+        console.error("Error fetching faculty:", error);
+      } finally {
+        setLoading(false); // Ensure loading is set to false
+      }
+    };
+
+    fetchFacultyNames();
+  }, []);
+
+  const handleDepartmentChange = async (selectedDepartmentId) => {
+    setSelectedDepartment(selectedDepartmentId);
+    setPrograms([]);
+    setLoadingPrograms(true);
+
+    try {
+      const programQuery = query(
+        collection(firestore, "programs"),
+        where("departmentId", "==", selectedDepartmentId)
+      );
+      const programSnapshot = await getDocs(programQuery);
+      const programData = programSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name,
+      }));
+      setPrograms(programData || []);
+    } catch (error) {
+      Alert.alert("Error", "Failed to fetch programs.");
+      console.error("Error fetching programs:", error);
+    } finally {
+      setLoadingPrograms(false);
+    }
+  };
+
+  const handleProgramChange = async (selectedProgramId) => {
+    setCourses([]);
+    setSelectedProgram(selectedProgramId);
+    setLoadingCourses(true);
+
+    try {
+      const courseQuery = query(
+        collection(firestore, "courses"),
+        where("programId", "==", selectedProgramId)
+      );
+      const courseSnapshot = await getDocs(courseQuery);
+      const courseData = courseSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name,
+      }));
+      setCourses(courseData);
+    } catch (error) {
+      Alert.alert("Error", "Failed to fetch courses.");
+      console.error("Error fetching courses:", error);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const departmentQuery = collection(firestore, "departments");
+        const departmentSnapshot = await getDocs(departmentQuery);
+        const departmentData = departmentSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name,
+        }));
+        setDepartments(departmentData);
+      } catch (error) {
+        Alert.alert("Error", "Failed to fetch departments.");
+        console.error("Error fetching departments:", error);
+      } finally {
+        setLoadingDepartments(false);
+      }
+    };
+
+    fetchDepartments();
+  }, []);
+
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const roomsQuery = collection(firestore, "rooms");
+        const roomsSnapshot = await getDocs(roomsQuery);
+        const roomData = roomsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          room_no: doc.data().room_no || "N/A",
+        }));
+        setRoomNumbers(roomData || []);
+      } catch (error) {
+        Alert.alert("Error", "Failed to fetch rooms.");
+        console.error("Error fetching rooms:", error);
+        setRoomNumbers([]);
+      } finally {
+        setLoadingRooms(false);
+      }
+    };
+
+    fetchRooms();
+  }, []);
 
   const handleSubmit = async () => {
-    if (!department || !semester || !startTime || !endTime || !course || !day || !facultyName || !roomNo) {
-      Alert.alert('Error', 'Please fill all fields.');
+    if (
+      !selectedDepartment ||
+      !selectedProgram ||
+      !semester ||
+      !startTime ||
+      !endTime ||
+      !course ||
+      !day ||
+      !facultyName ||
+      !selectedRoom ||
+      !shift
+    ) {
+      Alert.alert("Error", "Please fill all fields.");
       return;
     }
 
     try {
-      // Prepare the data to be saved in Firestore
       const timetableData = {
-        department,
+        department: selectedDepartment,
+        program: selectedProgram,
         semester,
         startTime,
         endTime,
         course,
         day,
-        facultyName,
-        roomNo,
+        facultyId: facultyName,
+        roomNumber: selectedRoom,
+        shift,
       };
 
-      // Save the data to Firestore
-      const docRef = await addDoc(collection(firestore, 'timetables'), timetableData);
-
-      // Show success alert
-      Alert.alert('Timetable Saved', 'Timetable has been saved ');
+      await addDoc(collection(firestore, "timetables"), timetableData);
+      Alert.alert("Timetable Saved", "Timetable has been saved.");
     } catch (error) {
-      // Handle any errors
-      Alert.alert('Error', 'There was an error saving the timetable.');
-      Alert.log('Error', error);
+      Alert.alert("Error", "There was an error saving the timetable.");
+      console.error("Error:", error);
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Timetable Form</Text>
-
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Department</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter Department"
-            value={department}
-            onChangeText={setDepartment}
-          />
+          <Text style={styles.title}>Timetable Form</Text>
+          <Picker
+            selectedValue={selectedDepartment}
+            style={styles.picker}
+            onValueChange={(itemValue) => handleDepartmentChange(itemValue)}
+          >
+            <Picker.Item label="Select Department" value="" />
+            {departments.map((dept) => (
+              <Picker.Item key={dept.id} label={dept.name} value={dept.id} />
+            ))}
+          </Picker>
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Semester</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter Semester"
-            value={semester}
-            onChangeText={setSemester}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Start Time</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Start Time"
-            value={startTime}
-            onChangeText={setStartTime}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>End Time</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="End Time"
-            value={endTime}
-            onChangeText={setEndTime}
-          />
+          <Text style={styles.label}>Program</Text>
+          {loadingPrograms ? (
+            <ActivityIndicator size="small" color="#08422d" />
+          ) : (
+            <Picker
+              selectedValue={selectedProgram}
+              style={styles.picker}
+              onValueChange={(itemValue) => handleProgramChange(itemValue)}
+            >
+              <Picker.Item label="Select Program" value="" />
+              {programs.map((prog) => (
+                <Picker.Item key={prog.id} label={prog.name} value={prog.id} />
+              ))}
+            </Picker>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Course</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Course Name"
-            value={course}
-            onChangeText={setCourse}
-          />
+          {loadingCourses ? (
+            <ActivityIndicator size="small" color="#08422d" />
+          ) : (
+            <Picker
+              selectedValue={course}
+              style={styles.picker}
+              onValueChange={(itemValue) => setCourse(itemValue)}
+            >
+              <Picker.Item label="Select Course" value="" />
+              {courses.map((course) => (
+                <Picker.Item
+                  key={course.id}
+                  label={course.name}
+                  value={course.name}
+                />
+              ))}
+            </Picker>
+          )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Semester</Text>
+          <Picker
+            selectedValue={semester}
+            style={styles.picker}
+            onValueChange={(itemValue) => setSemester(itemValue)}
+          >
+            <Picker.Item label="Select Semester" value="" />
+            {[...Array(8).keys()].map((num) => (
+              <Picker.Item
+                key={num + 1}
+                label={`Semester ${num + 1}`} // Ensure label is a string
+                value={(num + 1).toString()} // Ensure value is a string
+              />
+            ))}
+          </Picker>
         </View>
 
         <View style={styles.inputGroup}>
@@ -113,28 +290,95 @@ const TimetableForm = () => {
             <Picker.Item label="Wednesday" value="Wednesday" />
             <Picker.Item label="Thursday" value="Thursday" />
             <Picker.Item label="Friday" value="Friday" />
-            <Picker.Item label="Saturday" value="Saturday" />
           </Picker>
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Faculty Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter Faculty Name"
-            value={facultyName}
-            onChangeText={setFacultyName}
-          />
+          <Text style={styles.label}>Shift</Text>
+          <Picker
+            selectedValue={shift}
+            style={styles.picker}
+            onValueChange={(itemValue) => setShift(itemValue)}
+          >
+            <Picker.Item label="Select Shift" value="" />
+            <Picker.Item label="Morning" value="Morning" />
+            <Picker.Item label="Evening" value="Evening" />
+          </Picker>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Start Time</Text>
+          <Picker
+            selectedValue={startTime}
+            style={styles.picker}
+            onValueChange={(itemValue) => setStartTime(itemValue)}
+          >
+            <Picker.Item label="Select Start Time" value="" />
+            {shift &&
+              timeSlots[shift].start.map((time) => (
+                <Picker.Item key={time} label={time} value={time} />
+              ))}
+          </Picker>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>End Time</Text>
+          <Picker
+            selectedValue={endTime}
+            style={styles.picker}
+            onValueChange={(itemValue) => setEndTime(itemValue)}
+          >
+            <Picker.Item label="Select End Time" value="" />
+            {shift &&
+              timeSlots[shift].end.map((time) => (
+                <Picker.Item key={time} label={time} value={time} />
+              ))}
+          </Picker>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Faculty</Text>
+          {loading ? (
+            <ActivityIndicator size="small" color="#08422d" />
+          ) : (
+            <Picker
+              selectedValue={facultyName}
+              style={styles.picker}
+              onValueChange={(itemValue) => setFacultyName(itemValue)}
+            >
+              <Picker.Item label="Select Faculty" value="" />
+              {facultyList.map((faculty) => (
+                <Picker.Item
+                  key={faculty.id}
+                  label={faculty.name}
+                  value={faculty.id}
+                />
+              ))}
+            </Picker>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Room Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Room Number"
-            value={roomNo}
-            onChangeText={setRoomNo}
-          />
+          {loadingRooms ? (
+            <ActivityIndicator size="small" color="#08422d" />
+          ) : (
+            <Picker
+              selectedValue={selectedRoom}
+              style={styles.picker}
+              onValueChange={(itemValue) => setSelectedRoom(itemValue)}
+            >
+              <Picker.Item label="Select Room" value="" />
+              {Array.isArray(roomNumbers) &&
+                roomNumbers.map((room) => (
+                  <Picker.Item
+                    key={room.id}
+                    label={room.room_no.toString()} // Ensure label is a string
+                    value={room.room_no.toString()} // Ensure value is a string
+                  />
+                ))}
+            </Picker>
+          )}
         </View>
 
         <TouchableOpacity style={styles.button} onPress={handleSubmit}>
@@ -154,10 +398,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
     marginBottom: 20,
-    color: '#08422d',
+    color: "#08422d",
   },
   inputGroup: {
     marginBottom: 15,
@@ -165,33 +409,25 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     marginBottom: 5,
-    color: '#08422d',
-  },
-  input: {
-    height: 40,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 5,
-    paddingHorizontal: 10,
-    color: '#08422d',
+    color: "#08422d",
   },
   picker: {
     height: 40,
-    width: '100%',
-    borderColor: '#ccc',
+    width: "100%",
+    borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 5,
   },
   button: {
-    backgroundColor: '#08422d',
+    backgroundColor: "#08422d",
     padding: 15,
     borderRadius: 5,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonText: {
-    color: 'white',
+    color: "white",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });
 
