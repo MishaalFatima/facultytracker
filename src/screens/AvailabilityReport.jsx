@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react"; 
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Dimensions,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
 import {
   collection,
   query,
@@ -19,19 +18,32 @@ import {
 import { firestore } from "./firebaseConfig";
 
 const AvailabilityReport = ({ route }) => {
-  const { uid } = route.params; // Receive UID from navigation
-  const [data, setData] = useState([]); // State to hold the combined data
-  const [loading, setLoading] = useState(true); // State to handle loading
+  const { uid } = route.params; // UID passed from FacultyList or direct navigation
+  const [data, setData] = useState([]); // Combined availability data
+  const [loading, setLoading] = useState(true);
+  const [isPermanent, setIsPermanent] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("Fetching availability for UID:", uid); // Log UID to check if it's correct
+        console.log("Fetching availability for UID:", uid);
 
-        // Query to fetch faculty availability data for the specific UID (based on userId in the collection)
+        // Fetch user details first to determine faculty type
+        const userDocRef = doc(firestore, "users", uid);
+        const userDoc = await getDoc(userDocRef);
+        const userData = userDoc.exists() ? userDoc.data() : {};
+
+        // Check if the faculty member is permanent
+        if (userData.FacultyType !== "Permanent") {
+          setIsPermanent(false);
+          setLoading(false);
+          return;
+        }
+
+        // Query to fetch availability data for this faculty member
         const availabilityQuery = query(
           collection(firestore, "facultyAvailability"),
-          where("userId", "==", uid) // Use "userId" instead of "uid"
+          where("userId", "==", uid)
         );
         const availabilitySnapshot = await getDocs(availabilityQuery);
 
@@ -40,39 +52,35 @@ const AvailabilityReport = ({ route }) => {
           ...doc.data(),
         }));
 
-        // Fetch user details using UID
-        const userDoc = await getDoc(doc(firestore, "users", uid));
-        const userData = userDoc.exists() ? userDoc.data() : {};
-
         // Merge availability and user data
         const mergedData = availabilityData.map((item) => ({
           ...item,
           userName: userData.name || "N/A",
           registrationNumber: userData.registrationNumber || "N/A",
           department: userData.department || "N/A",
-          from: item.creationTime?.toDate() ? item.creationTime.toDate() : null,
-          to: item.endTime?.toDate() ? item.endTime.toDate() : null,
-          location: item.location || null, // Assuming location is stored in Firestore
+          from: item.creationTime?.toDate ? item.creationTime.toDate() : null,
+          to: item.endTime?.toDate ? item.endTime.toDate() : null,
+          location: item.location || null,
         }));
 
-        // Sort data by the `from` field in descending order (latest first)
+        // Sort data by the 'from' field (latest first)
         const sortedData = mergedData.sort((a, b) => {
           if (a.from && b.from) {
             return new Date(b.from) - new Date(a.from);
           }
-          return 0; // Fallback if `from` is missing
+          return 0;
         });
 
-        setData(sortedData); // Update the state with the sorted data
+        setData(sortedData);
       } catch (error) {
         console.log("Error fetching data from Firestore:", error);
       } finally {
-        setLoading(false); // Stop loading
+        setLoading(false);
       }
     };
 
-    fetchData(); // Fetch data on component mount
-  }, [uid]); // Only re-run if the UID changes
+    fetchData();
+  }, [uid]);
 
   if (loading) {
     return (
@@ -80,8 +88,19 @@ const AvailabilityReport = ({ route }) => {
     );
   }
 
+  // If not permanent, show an appropriate message
+  if (!isPermanent) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.noData}>
+          Availability report is only available for permanent faculty.
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView>
+    <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.table}>
         {/* Table Header */}
         <View style={styles.row}>
@@ -136,6 +155,12 @@ const AvailabilityReport = ({ route }) => {
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    padding: 20,
+    backgroundColor: "#fff",
+    alignItems: "center",
+  },
   table: {
     borderWidth: 1,
     borderColor: "#ccc",

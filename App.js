@@ -14,12 +14,17 @@ import PrincipalDashboard from "./src/screens/Principaldashboard/PrincipalDashbo
 import FacultyList from "./src/screens/Principaldashboard/FacultyList";
 import FacultyTimetable from "./src/screens/FacultyDashboard/FacultyTimetable";
 import AvailabilityReport from "./src/screens/AvailabilityReport";
-import QRScannerScreen from "./src/screens/crgr_dashboard/QRScannerScreen";
+import QRScannerScreen from "./src/screens/FacultyDashboard/QRScannerScreen";
 import DepaertmentList from "./src/screens/AdminDashboard/DepartmentsList";
 import CourseList from "./src/screens/AdminDashboard/CourseList";
 import ProgramList from "./src/screens/AdminDashboard/ProgramsList";
+import ProfileScreen from "./src/screens/ProfileScreen";
+import EditProfileScreen from "./src/screens/EditProfileScreen";
 import TimetableForm from "./src/screens/crgr_dashboard/TimetableForm";
-
+import AttendanceRecord from "./src/screens/Principaldashboard/AttendanceRecord";
+import Timetable from "./src/screens/Principaldashboard/Timetable";
+import DailyAttendaceReport from "./src/screens/Principaldashboard/DailyAttendaceReport";
+import AllUsers from "./src/screens/Principaldashboard/AllUsers";
 
 const Stack = createStackNavigator();
 
@@ -78,6 +83,14 @@ export default function App() {
         <Stack.Screen name="ProgramList" component={ProgramList} />    
         <Stack.Screen name="CourseList" component={CourseList} />    
         <Stack.Screen name="FacultyTimetable" component={FacultyTimetable} />    
+        <Stack.Screen name="ProfileScreen" component={ProfileScreen} />    
+        <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />   
+        <Stack.Screen name="AttendanceRecord" component={AttendanceRecord} />
+        <Stack.Screen name="Timetable" component={Timetable} /> 
+        <Stack.Screen name="DailyAttendaceReport" component={DailyAttendaceReport} />
+        <Stack.Screen name="AllUsers" component={AllUsers} />
+
+         
       </Stack.Navigator>
     </NavigationContainer>
   );

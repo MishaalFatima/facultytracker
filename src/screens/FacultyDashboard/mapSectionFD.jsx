@@ -27,10 +27,10 @@ const MapSectionFD = () => {
   const [availability, setAvailability] = useState("Unavailable");
 
   const universityCoordinates = {
-    // latitude: 32.29194,
-    // longitude: 72.27361,
-    latitude: 32.424165,
-    longitude: 74.1134659,
+    latitude: 32.284533,
+    longitude: 72.2895413,
+    // latitude: 32.424165,
+    // longitude: 74.1134659,
     radius: 0.005,
   };
 

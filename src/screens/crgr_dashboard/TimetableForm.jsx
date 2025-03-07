@@ -54,18 +54,16 @@ const TimetableForm = () => {
           where("role", "==", "Faculty")
         );
         const facultySnapshot = await getDocs(facultyQuery);
-
         const facultyData = facultySnapshot.docs.map((doc) => ({
           id: doc.id,
           name: doc.data().name || "Unknown",
         }));
-
         setFacultyList(facultyData);
       } catch (error) {
         Alert.alert("Error", "Failed to fetch faculty names.");
         console.error("Error fetching faculty:", error);
       } finally {
-        setLoading(false); // Ensure loading is set to false
+        setLoading(false);
       }
     };
 
@@ -76,7 +74,6 @@ const TimetableForm = () => {
     setSelectedDepartment(selectedDepartmentId);
     setPrograms([]);
     setLoadingPrograms(true);
-
     try {
       const programQuery = query(
         collection(firestore, "programs"),
@@ -100,7 +97,6 @@ const TimetableForm = () => {
     setCourses([]);
     setSelectedProgram(selectedProgramId);
     setLoadingCourses(true);
-
     try {
       const courseQuery = query(
         collection(firestore, "courses"),
@@ -179,7 +175,6 @@ const TimetableForm = () => {
       Alert.alert("Error", "Please fill all fields.");
       return;
     }
-
     try {
       const timetableData = {
         department: selectedDepartment,
@@ -193,7 +188,6 @@ const TimetableForm = () => {
         roomNumber: selectedRoom,
         shift,
       };
-
       await addDoc(collection(firestore, "timetables"), timetableData);
       Alert.alert("Timetable Saved", "Timetable has been saved.");
     } catch (error) {
@@ -205,24 +199,30 @@ const TimetableForm = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.title}>Timetable Form</Text>
-          <Picker
-            selectedValue={selectedDepartment}
-            style={styles.picker}
-            onValueChange={(itemValue) => handleDepartmentChange(itemValue)}
-          >
-            <Picker.Item label="Select Department" value="" />
-            {departments.map((dept) => (
-              <Picker.Item key={dept.id} label={dept.name} value={dept.id} />
-            ))}
-          </Picker>
+        <Text style={styles.formTitle}>Timetable Form</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.label}>Department</Text>
+          {loadingDepartments ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Picker
+              selectedValue={selectedDepartment}
+              style={styles.picker}
+              onValueChange={(itemValue) => handleDepartmentChange(itemValue)}
+            >
+              <Picker.Item label="Select Department" value="" />
+              {departments.map((dept) => (
+                <Picker.Item key={dept.id} label={dept.name} value={dept.id} />
+              ))}
+            </Picker>
+          )}
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Program</Text>
           {loadingPrograms ? (
-            <ActivityIndicator size="small" color="#08422d" />
+            <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Picker
               selectedValue={selectedProgram}
@@ -237,10 +237,10 @@ const TimetableForm = () => {
           )}
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Course</Text>
           {loadingCourses ? (
-            <ActivityIndicator size="small" color="#08422d" />
+            <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Picker
               selectedValue={course}
@@ -248,18 +248,18 @@ const TimetableForm = () => {
               onValueChange={(itemValue) => setCourse(itemValue)}
             >
               <Picker.Item label="Select Course" value="" />
-              {courses.map((course) => (
+              {courses.map((courseItem) => (
                 <Picker.Item
-                  key={course.id}
-                  label={course.name}
-                  value={course.name}
+                  key={courseItem.id}
+                  label={courseItem.name}
+                  value={courseItem.name}
                 />
               ))}
             </Picker>
           )}
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Semester</Text>
           <Picker
             selectedValue={semester}
@@ -270,14 +270,14 @@ const TimetableForm = () => {
             {[...Array(8).keys()].map((num) => (
               <Picker.Item
                 key={num + 1}
-                label={`Semester ${num + 1}`} // Ensure label is a string
-                value={(num + 1).toString()} // Ensure value is a string
+                label={`Semester ${num + 1}`}
+                value={(num + 1).toString()}
               />
             ))}
           </Picker>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Day</Text>
           <Picker
             selectedValue={day}
@@ -293,7 +293,7 @@ const TimetableForm = () => {
           </Picker>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Shift</Text>
           <Picker
             selectedValue={shift}
@@ -306,7 +306,7 @@ const TimetableForm = () => {
           </Picker>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Start Time</Text>
           <Picker
             selectedValue={startTime}
@@ -321,7 +321,7 @@ const TimetableForm = () => {
           </Picker>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>End Time</Text>
           <Picker
             selectedValue={endTime}
@@ -336,10 +336,10 @@ const TimetableForm = () => {
           </Picker>
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Faculty</Text>
           {loading ? (
-            <ActivityIndicator size="small" color="#08422d" />
+            <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Picker
               selectedValue={facultyName}
@@ -358,10 +358,10 @@ const TimetableForm = () => {
           )}
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.card}>
           <Text style={styles.label}>Room Number</Text>
           {loadingRooms ? (
-            <ActivityIndicator size="small" color="#08422d" />
+            <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Picker
               selectedValue={selectedRoom}
@@ -373,8 +373,8 @@ const TimetableForm = () => {
                 roomNumbers.map((room) => (
                   <Picker.Item
                     key={room.id}
-                    label={room.room_no.toString()} // Ensure label is a string
-                    value={room.room_no.toString()} // Ensure value is a string
+                    label={room.room_no.toString()}
+                    value={room.room_no.toString()}
                   />
                 ))}
             </Picker>
@@ -392,42 +392,54 @@ const TimetableForm = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: "#f9f9f9",
   },
   container: {
     padding: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
+  formTitle: {
+    fontSize: 30,
+    fontWeight: "700",
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 30,
     color: "#08422d",
   },
-  inputGroup: {
-    marginBottom: 15,
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   label: {
     fontSize: 16,
-    marginBottom: 5,
-    color: "#08422d",
+    fontWeight: "600",
+    marginBottom: 8,
+    backgroundColor: "rgb(199, 179, 23)",
+    color: "white",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 4,
   },
   picker: {
-    height: 40,
+    height: 50,
     width: "100%",
-    borderColor: "#ccc",
-    borderWidth: 1,
-    borderRadius: 5,
   },
   button: {
     backgroundColor: "#08422d",
-    padding: 15,
-    borderRadius: 5,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
+    marginTop: 30,
   },
   buttonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "600",
   },
 });
 

@@ -1,37 +1,49 @@
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TouchableHighlight } from "react-native";
+import React, { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  TouchableHighlight,
+} from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import Logout from "../Logout"; // Importing the Logout component
+import Logout from "../Logout";
+import { useFocusEffect } from "@react-navigation/native";
 
 const CRGRDashboardScreen = ({ navigation }) => {
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuActive, setMenuActive] = useState(false);
-  const toggleMenu = () => {
-    setMenuVisible(!menuVisible);
-    setMenuActive(!menuActive); // Toggle menu active state
-  };
+   const [menuVisible, setMenuVisible] = useState(false);
+    const [menuActive, setMenuActive] = useState(false);
+ const toggleMenu = () => {
+      setMenuVisible(!menuVisible);
+      setMenuActive(!menuActive);
+    };
+  
+    // Reset the menu state every time this screen is focused
+    useFocusEffect(
+      useCallback(() => {
+        setMenuVisible(false);
+        setMenuActive(false);
+      }, [])
+    );
 
   const handleCaptureAttendance = () => {
-    navigation.navigate("QRScannerScreen")
+    navigation.navigate("QRScannerScreen");
   };
 
   return (
     <View style={styles.container}>
-
       <View style={styles.header}>
-              <Text style={styles.title}>CR/GR Dashboard</Text>
-              <TouchableHighlight onPress={toggleMenu} underlayColor="#fdcc0d">
-                <MaterialIcons
-                  name="menu"
-                  size={28}
-                  color={menuActive ? "#fdcc0d" : "#08422d"} // Change icon color based on menu state
-                  style={styles.menuIcon} // Add the style here
-                />
-              </TouchableHighlight>
+        <Text style={styles.title}>CR/GR Dashboard</Text>
+        <TouchableHighlight onPress={toggleMenu} underlayColor="#fdcc0d">
+          <MaterialIcons
+            name="menu"
+            size={28}
+            color={menuActive ? "#fdcc0d" : "#08422d"} // Change icon color based on menu state
+            style={styles.menuIcon} // Add the style here
+          />
+        </TouchableHighlight>
       </View>
-
-
-
 
       {/* Hamburger Menu Modal */}
       <Modal
@@ -45,9 +57,9 @@ const CRGRDashboardScreen = ({ navigation }) => {
             {/* Menu options */}
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate('TimetableForm')}
+              onPress={() => navigation.navigate("TimetableForm")}
               underlayColor="#fdcc0d" // Set yellow color on press
-                        >
+            >
               <View style={styles.menuItemContent}>
                 <MaterialIcons name="file-upload" size={24} color="#08422d" />
                 <Text style={styles.menuText}>Upload Timetable</Text>
@@ -56,48 +68,46 @@ const CRGRDashboardScreen = ({ navigation }) => {
 
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate('Request for Update Timetable')}
+              onPress={() =>
+                navigation.navigate("Request for Update Timetable")
+              }
               underlayColor="#fdcc0d" // Set yellow color on press
-                        >
+            >
               <View style={styles.menuItemContent}>
                 <MaterialIcons name="update" size={24} color="#08422d" />
-                <Text style={styles.menuText}>Request for Update Timetable</Text>
+                <Text style={styles.menuText}>
+                  Request for Update Timetable
+                </Text>
               </View>
             </TouchableHighlight>
 
             <TouchableHighlight
               style={styles.menuItem}
+              onPress={() => navigation.navigate("ProfileScreen")}
+              underlayColor="#fdcc0d" // Yellow highlight on press
+            >
+              <View style={styles.menuItemContent}>
+                <MaterialIcons name="person" size={24} color="#08422d" />
+                <Text style={styles.menuText}>View Profile</Text>
+              </View>
+            </TouchableHighlight>
+
+            <Logout variant="menu" />
+
+            <TouchableHighlight
+              style={styles.menuItem}
               onPress={toggleMenu}
               underlayColor="#fdcc0d" // Set yellow color on press
-                                    >
+            >
               <View style={styles.menuItemContent}>
-                    <MaterialIcons name="close" size={24} color="red" />
-                    <Text style={styles.menuText}>Close</Text>
+                <MaterialIcons name="close" size={24} color="red" />
+                <Text style={styles.menuText}>Close</Text>
               </View>
             </TouchableHighlight>
           </View>
         </View>
       </Modal>
 
-      
-      <View style={styles.scrollContainer}>
-        {/* Attendance Submission Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Attendance Tracking</Text>
-        <TouchableOpacity
-          accessible={true}
-          style={styles.singleButton}
-          onPress={handleCaptureAttendance}
-        >
-          <MaterialIcons name="camera-alt" size={20} color="white" style={styles.icon} />
-          <Text style={styles.buttonText}>Capture Attendance Photo</Text>
-        </TouchableOpacity>
-      </View>
-      {/* Logout Button */}
-      <Logout />
-
-      </View>
-      
     </View>
   );
 };
@@ -108,9 +118,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
   },
   header: {
-    flexDirection: 'row', // Align items horizontally
-    alignItems: 'center', // Vertically center the items
-    justifyContent: 'space-between', // Pushes the title to the left and the menu icon to the right
+    flexDirection: "row", // Align items horizontally
+    alignItems: "center", // Vertically center the items
+    justifyContent: "space-between", // Pushes the title to the left and the menu icon to the right
     padding: 15,
     elevation: 2,
     paddingTop: 25,
@@ -128,7 +138,7 @@ const styles = StyleSheet.create({
     padding: 15,
     elevation: 2, // Adds shadow effect
     backgroundColor: "#fff", // Makes sure the shadow effect is clear
-    width: '100%', // Ensures the top bar spans the full width of the screen
+    width: "100%", // Ensures the top bar spans the full width of the screen
     marginBottom: 15, // Adds spacing below the top bar
   },
 
@@ -139,28 +149,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   menu: {
-    width: '80%',
-    backgroundColor: '#ffffff',
+    width: "80%",
+    backgroundColor: "#ffffff",
     borderRadius: 10,
     padding: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   menuItem: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingVertical: 12,
-    width: '100%',
-    alignItems: 'center',
+    width: "100%",
+    alignItems: "center",
   },
   menuItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   menuIcon: {
     marginRight: 10,
   },
   menuText: {
     fontSize: 18,
-    color: '#08422d',
+    color: "#08422d",
     marginLeft: 10,
   },
   section: {

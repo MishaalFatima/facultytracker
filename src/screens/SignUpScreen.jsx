@@ -103,11 +103,11 @@ const SignUpScreen = ({ navigation }) => {
   
       await addData(user.uid);
       Alert.alert("Sign Up Successful", `Welcome ${name}`);
+      resetForm();
     } catch (error) {
       console.log("Error signing up: ", error);
-      Alert.alert("Error", error.message);
+      Alert.alert("Error", "Error signing up. Please try again.");
     }finally{
-      resetForm();
       setLoading(false);
     }
   };
