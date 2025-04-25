@@ -11,10 +11,13 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import Logout from "../Logout";
 import { useFocusEffect } from "@react-navigation/native";
+import { firestore } from "../firebaseConfig";
+import { collection, getCountFromServer } from "firebase/firestore";
 
 const AdminDashboard = ({ navigation }) => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuActive, setMenuActive] = useState(false);
+  const [totalUsers, setTotalUsers] = useState(0); // state for user count
 
   const toggleMenu = () => {
     setMenuVisible(!menuVisible);
@@ -29,6 +32,23 @@ const AdminDashboard = ({ navigation }) => {
     }, [])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUserCount = async () => {
+        try {
+          const usersRef = collection(firestore, "users");
+          const countSnapshot = await getCountFromServer(usersRef);
+          setTotalUsers(countSnapshot.data().count);
+        } catch (error) {
+          console.error("Error fetching user count:", error);
+          setTotalUsers(0);
+        }
+      };
+
+      fetchUserCount();
+    }, [])
+  );
+
   return (
     <ScrollView style={styles.container}>
       {/* Top Bar with Hamburger Menu */}
@@ -38,8 +58,8 @@ const AdminDashboard = ({ navigation }) => {
           <MaterialIcons
             name="menu"
             size={28}
-            color={menuActive ? "#fdcc0d" : "#08422d"} // Change icon color based on menu state
-            style={styles.menuIcon} // Add the style here
+            color={menuActive ? "#fdcc0d" : "#08422d"}
+            style={styles.menuIcon}
           />
         </TouchableHighlight>
       </View>
@@ -53,40 +73,23 @@ const AdminDashboard = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.menu}>
-            {/* Dashboard Menu Item with Icon */}
-
-            {/* Manage User Requests Menu Item with Icon */}
-            <TouchableHighlight
-              style={styles.menuItem}
-              onPress={() => navigation.navigate("UserRequests")}
-              underlayColor="#fdcc0d" // Set yellow color on press
-            >
-              <View style={styles.menuItemContent}>
-                <MaterialIcons name="group" size={24} color="#08422d" />
-                <Text style={styles.menuText}>Manage User Requests</Text>
-              </View>
-            </TouchableHighlight>
-
-            {/* User Account Management Menu Item with Icon */}
+            {/* User Account Management */}
             <TouchableHighlight
               style={styles.menuItem}
               onPress={() => navigation.navigate("AllUsers")}
-              underlayColor="#fdcc0d" // Set yellow color on press
+              underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
-                <MaterialIcons
-                  name="account-circle"
-                  size={24}
-                  color="#08422d"
-                />
+                <MaterialIcons name="account-circle" size={24} color="#08422d" />
                 <Text style={styles.menuText}>User Account Management</Text>
               </View>
             </TouchableHighlight>
 
+            {/* Department List */}
             <TouchableHighlight
               style={styles.menuItem}
               onPress={() => navigation.navigate("DepaertmentList")}
-              underlayColor="#fdcc0d" // Set yellow color on press
+              underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
                 <MaterialIcons name="domain" size={24} color="#08422d" />
@@ -94,10 +97,23 @@ const AdminDashboard = ({ navigation }) => {
               </View>
             </TouchableHighlight>
 
+            {/* Room List Option added under Department List */}
+            <TouchableHighlight
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("RoomList")}
+              underlayColor="#fdcc0d"
+            >
+              <View style={styles.menuItemContent}>
+                <MaterialIcons name="meeting-room" size={24} color="#08422d" />
+                <Text style={styles.menuText}>Room List</Text>
+              </View>
+            </TouchableHighlight>
+
+            {/* View Profile */}
             <TouchableHighlight
               style={styles.menuItem}
               onPress={() => navigation.navigate("ProfileScreen")}
-              underlayColor="#fdcc0d" // Yellow highlight on press
+              underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
                 <MaterialIcons name="person" size={24} color="#08422d" />
@@ -107,11 +123,11 @@ const AdminDashboard = ({ navigation }) => {
 
             <Logout variant="menu" />
 
-            {/* Close Menu Item with Icon */}
+            {/* Close Menu Item */}
             <TouchableHighlight
               style={styles.menuItem}
               onPress={toggleMenu}
-              underlayColor="#fdcc0d" // Set yellow color on press
+              underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
                 <MaterialIcons name="close" size={24} color="red" />
@@ -125,10 +141,7 @@ const AdminDashboard = ({ navigation }) => {
       {/* Main Content */}
       <View style={[styles.section, styles.firstSection]}>
         <Text style={styles.sectionTitle}>Dashboard Overview</Text>
-        <Text style={styles.sectionText}>Total Users: 100</Text>
-        <Text style={styles.sectionText}>
-          Recent Activities: Last login times, recent updates...
-        </Text>
+        <Text style={styles.sectionText}>Total Users: {totalUsers}</Text>
       </View>
 
       <View style={styles.section}>
@@ -201,7 +214,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-
   firstSection: {
     marginTop: 16,
   },
@@ -254,7 +266,7 @@ const styles = StyleSheet.create({
   menuText: {
     fontSize: 18,
     color: "#08422d",
-    marginLeft: 10, // Add margin to space out the icon and text
+    marginLeft: 10, // Space between icon and text
   },
 });
 

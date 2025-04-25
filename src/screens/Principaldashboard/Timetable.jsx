@@ -8,10 +8,21 @@ import {
   Alert,
   FlatList,
   ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import DropDownPicker from "react-native-dropdown-picker";
+import Icon from "react-native-vector-icons/MaterialIcons";
 import { firestore } from "../firebaseConfig";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import EditTimetable from "../AdminDashboard/EditTimetable";
 
 const Timetable = () => {
   const [timetables, setTimetables] = useState([]);
@@ -45,7 +56,11 @@ const Timetable = () => {
     { label: "Evening", value: "Evening" },
   ]);
 
-  // Fetch timetable entries
+  // Edit modal state
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedTimetable, setSelectedTimetable] = useState(null);
+
+  // --- Fetching Data ---
   useEffect(() => {
     const fetchTimetables = async () => {
       try {
@@ -67,7 +82,6 @@ const Timetable = () => {
     fetchTimetables();
   }, []);
 
-  // Fetch departments and build a mapping: id -> name
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
@@ -89,7 +103,6 @@ const Timetable = () => {
     fetchDepartments();
   }, []);
 
-  // Fetch programs and build a mapping: id -> name
   useEffect(() => {
     const fetchPrograms = async () => {
       try {
@@ -111,7 +124,6 @@ const Timetable = () => {
     fetchPrograms();
   }, []);
 
-  // Fetch faculty names (filtered by role) and build a mapping: id -> name
   useEffect(() => {
     const fetchFaculty = async () => {
       try {
@@ -183,7 +195,7 @@ const Timetable = () => {
     );
   }
 
-  // Filter timetable entries based on selected dropdown values
+  // --- Filtering ---
   const filteredTimetables = timetables.filter((tt) => {
     if (deptValue && tt.department !== deptValue) return false;
     if (programValue && tt.program !== programValue) return false;
@@ -192,6 +204,53 @@ const Timetable = () => {
     return true;
   });
 
+  // --- Handlers ---
+  const handleEdit = (record) => {
+    setSelectedTimetable(record);
+    setEditModalVisible(true);
+  };
+
+  const handleDelete = (recordId) => {
+    Alert.alert(
+      "Confirm Delete",
+      "Are you sure you want to delete this timetable entry?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(firestore, "timetables", recordId));
+              setTimetables((prev) => prev.filter((tt) => tt.id !== recordId));
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete timetable entry.");
+              console.error("Error deleting timetable: ", error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSaveEdit = async (updatedData) => {
+    try {
+      await updateDoc(doc(firestore, "timetables", selectedTimetable.id), updatedData);
+      setTimetables((prev) =>
+        prev.map((tt) =>
+          tt.id === selectedTimetable.id ? { ...tt, ...updatedData } : tt
+        )
+      );
+    } catch (error) {
+      Alert.alert("Error", "Failed to update timetable entry.");
+      console.error("Error updating timetable: ", error);
+    } finally {
+      setEditModalVisible(false);
+      setSelectedTimetable(null);
+    }
+  };
+
+  // --- Render Table Row ---
   const renderTableRow = ({ item: tt }) => (
     <View style={styles.tableRow}>
       <Text style={styles.tableCell}>
@@ -211,6 +270,14 @@ const Timetable = () => {
       </Text>
       <Text style={styles.tableCell}>{tt.roomNumber}</Text>
       <Text style={styles.tableCell}>{tt.shift}</Text>
+      <View style={[styles.tableCell, styles.actionCell]}>
+        <TouchableOpacity onPress={() => handleEdit(tt)}>
+          <Icon name="edit" size={20} color="blue" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDelete(tt.id)}>
+          <Icon name="delete" size={20} color="red" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -287,6 +354,7 @@ const Timetable = () => {
               <Text style={styles.headerCell}>Faculty</Text>
               <Text style={styles.headerCell}>Room Number</Text>
               <Text style={styles.headerCell}>Shift</Text>
+              <Text style={styles.headerCell}>Actions</Text>
             </View>
             <FlatList
               data={filteredTimetables}
@@ -300,6 +368,17 @@ const Timetable = () => {
           </View>
         </ScrollView>
       </View>
+      {selectedTimetable && (
+        <EditTimetable
+          visible={editModalVisible}
+          record={selectedTimetable}
+          onClose={() => {
+            setEditModalVisible(false);
+            setSelectedTimetable(null);
+          }}
+          onSave={handleSaveEdit}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -330,7 +409,7 @@ const styles = StyleSheet.create({
     color: "#08422d",
   },
   dropdownContainer: {
-    // Additional styling can go here if needed
+    // Additional styling if needed
   },
   table: {
     borderWidth: 1,
@@ -344,7 +423,7 @@ const styles = StyleSheet.create({
     padding: 8,
     borderWidth: 1,
     borderColor: "#ccc",
-    minWidth: 120,
+    width: 120, // Fixed width for consistency
     color: "#fff",
     fontWeight: "bold",
     textAlign: "center",
@@ -356,8 +435,13 @@ const styles = StyleSheet.create({
     padding: 8,
     borderWidth: 1,
     borderColor: "#ccc",
-    minWidth: 120,
+    width: 120, // Fixed width for consistency
     textAlign: "center",
+  },
+  actionCell: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
   },
   noData: {
     padding: 8,

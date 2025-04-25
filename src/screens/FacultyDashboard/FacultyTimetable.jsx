@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,10 +12,37 @@ import { auth, firestore } from "../firebaseConfig";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import Icon from "react-native-vector-icons/Feather";
 
+// Helper function to convert a time string into a Date object for today.
+// Supports both 12-hour (with AM/PM) and 24-hour formats.
+const getTodayTime = (timeStr) => {
+  const now = new Date();
+  if (timeStr.toUpperCase().includes("AM") || timeStr.toUpperCase().includes("PM")) {
+    const [time, modifier] = timeStr.split(" ");
+    let [hours, minutes] = time.split(":").map(Number);
+    if (modifier.toUpperCase() === "PM" && hours !== 12) hours += 12;
+    if (modifier.toUpperCase() === "AM" && hours === 12) hours = 0;
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+  } else {
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+  }
+};
+
 const FacultyTimetable = ({ navigation }) => {
   const [timetable, setTimetable] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [enabledTimeslot, setEnabledTimeslot] = useState(null);
 
+  // Update current time every minute (or every second for testing).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Change to 1000 for testing if needed
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch timetable from Firestore for the current faculty.
   useEffect(() => {
     const fetchTimetable = async () => {
       try {
@@ -31,7 +58,7 @@ const FacultyTimetable = ({ navigation }) => {
           if (timetableData.length === 0) {
             Alert.alert("No Timetable", "No timetable found for this faculty.");
           }
-          setTimetable(timetableData); // Even if empty, update state to stop loading
+          setTimetable(timetableData);
         }
       } catch (error) {
         Alert.alert("Error", "Failed to fetch timetable.");
@@ -44,8 +71,28 @@ const FacultyTimetable = ({ navigation }) => {
     fetchTimetable();
   }, []);
 
-  const renderItem = useCallback(
-    ({ item }) => (
+  // Determine if any class scheduled for today is currently active.
+  useEffect(() => {
+    const todayName = currentTime.toLocaleDateString("en-US", { weekday: "long" });
+    const active = timetable.find((item) => {
+      if (item.day !== todayName) return false;
+      const start = getTodayTime(item.startTime);
+      const end = getTodayTime(item.endTime);
+      return currentTime >= start && currentTime <= end;
+    });
+    setEnabledTimeslot(active || null);
+  }, [currentTime, timetable]);
+
+  const renderItem = ({ item }) => {
+    const todayName = currentTime.toLocaleDateString("en-US", { weekday: "long" });
+    const isToday = item.day === todayName;
+    const classStartTime = getTodayTime(item.startTime);
+    const classEndTime = getTodayTime(item.endTime);
+
+    // Disable the camera if it's not today or the current time is outside the class window.
+    const disableCamera = !isToday || currentTime < classStartTime || currentTime > classEndTime;
+
+    return (
       <View style={styles.timetableItem}>
         <View>
           <Text style={styles.timetableText}>
@@ -54,21 +101,23 @@ const FacultyTimetable = ({ navigation }) => {
           <Text style={styles.timetableText}>Room: {item.roomNumber}</Text>
         </View>
         <TouchableOpacity
-          onPress={() =>
-            navigation.navigate("QRScannerScreen", { timetable: item })
-          }
+          onPress={() => {
+            if (!disableCamera) {
+              navigation.navigate("QRScannerScreen", { timetable: item });
+            }
+          }}
+          disabled={disableCamera}
         >
           <Icon
             name="camera"
             size={24}
-            color="#08422d"
+            color={disableCamera ? "#ccc" : "#08422d"}
             style={styles.cameraIcon}
           />
         </TouchableOpacity>
       </View>
-    ),
-    []
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -78,17 +127,29 @@ const FacultyTimetable = ({ navigation }) => {
     );
   }
 
+  // If an enabled timeslot exists, reorder the timetable array so it comes first.
+  let sortedTimetable = timetable;
+  if (enabledTimeslot) {
+    sortedTimetable = [
+      enabledTimeslot,
+      ...timetable.filter(
+        (item) =>
+          // Compare based on a unique combination of fields.
+          !(item.day === enabledTimeslot.day &&
+            item.course === enabledTimeslot.course &&
+            item.startTime === enabledTimeslot.startTime &&
+            item.endTime === enabledTimeslot.endTime)
+      ),
+    ];
+  }
+
   return (
     <View style={styles.container}>
-      {timetable.length > 0 ? (
-        <FlatList
-          data={timetable}
-          keyExtractor={(item, index) => index.toString()}
-          renderItem={renderItem}
-        />
-      ) : (
-        <Text style={styles.noDataText}>No timetable available.</Text>
-      )}
+      <FlatList
+        data={sortedTimetable}
+        keyExtractor={(item, index) => index.toString()}
+        renderItem={renderItem}
+      />
     </View>
   );
 };
@@ -118,12 +179,6 @@ const styles = StyleSheet.create({
   timetableText: {
     fontSize: 16,
     color: "#08422d",
-  },
-  noDataText: {
-    fontSize: 16,
-    color: "#555",
-    textAlign: "center",
-    marginTop: 20,
   },
 });
 

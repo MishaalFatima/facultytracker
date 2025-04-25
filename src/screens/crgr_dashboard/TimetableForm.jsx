@@ -35,17 +35,19 @@ const TimetableForm = () => {
   const [facultyList, setFacultyList] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Time slots with AM/PM labels
   const timeSlots = {
     Morning: {
-      start: ["8:30", "10:00", "11:30", "1:00"],
-      end: ["10:00", "11:30", "1:00", "2:30"],
+      start: ["8:30 AM", "10:00 AM", "11:30 AM", "1:00 PM"],
+      end: ["10:00 AM", "11:30 AM", "1:00 PM", "2:30 PM"],
     },
     Evening: {
-      start: ["2:30", "4:00", "5:30", "7:00"],
-      end: ["4:00", "5:30", "7:00", "8:30"],
+      start: ["2:30 PM", "4:00 PM", "5:30 PM", "7:00 PM"],
+      end: ["4:00 PM", "5:30 PM", "7:00 PM", "8:30 PM"],
     },
   };
 
+  // Fetch faculty list
   useEffect(() => {
     const fetchFacultyNames = async () => {
       try {
@@ -70,6 +72,29 @@ const TimetableForm = () => {
     fetchFacultyNames();
   }, []);
 
+  // Fetch departments
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const departmentQuery = collection(firestore, "departments");
+        const departmentSnapshot = await getDocs(departmentQuery);
+        const departmentData = departmentSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name,
+        }));
+        setDepartments(departmentData);
+      } catch (error) {
+        Alert.alert("Error", "Failed to fetch departments.");
+        console.error("Error fetching departments:", error);
+      } finally {
+        setLoadingDepartments(false);
+      }
+    };
+
+    fetchDepartments();
+  }, []);
+
+  // Fetch programs based on selected department
   const handleDepartmentChange = async (selectedDepartmentId) => {
     setSelectedDepartment(selectedDepartmentId);
     setPrograms([]);
@@ -93,6 +118,7 @@ const TimetableForm = () => {
     }
   };
 
+  // Fetch courses based on selected program; include both name and code
   const handleProgramChange = async (selectedProgramId) => {
     setCourses([]);
     setSelectedProgram(selectedProgramId);
@@ -105,7 +131,8 @@ const TimetableForm = () => {
       const courseSnapshot = await getDocs(courseQuery);
       const courseData = courseSnapshot.docs.map((doc) => ({
         id: doc.id,
-        name: doc.data().name,
+        name: doc.data().name, // Course name
+        code: doc.data().code, // Course code (e.g., "MATH4137")
       }));
       setCourses(courseData);
     } catch (error) {
@@ -116,27 +143,7 @@ const TimetableForm = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      try {
-        const departmentQuery = collection(firestore, "departments");
-        const departmentSnapshot = await getDocs(departmentQuery);
-        const departmentData = departmentSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          name: doc.data().name,
-        }));
-        setDepartments(departmentData);
-      } catch (error) {
-        Alert.alert("Error", "Failed to fetch departments.");
-        console.error("Error fetching departments:", error);
-      } finally {
-        setLoadingDepartments(false);
-      }
-    };
-
-    fetchDepartments();
-  }, []);
-
+  // Fetch rooms
   useEffect(() => {
     const fetchRooms = async () => {
       try {
@@ -159,6 +166,7 @@ const TimetableForm = () => {
     fetchRooms();
   }, []);
 
+  // Save timetable data
   const handleSubmit = async () => {
     if (
       !selectedDepartment ||
@@ -182,7 +190,7 @@ const TimetableForm = () => {
         semester,
         startTime,
         endTime,
-        course,
+        course, // Only the course code is saved here
         day,
         facultyId: facultyName,
         roomNumber: selectedRoom,
@@ -251,8 +259,8 @@ const TimetableForm = () => {
               {courses.map((courseItem) => (
                 <Picker.Item
                   key={courseItem.id}
-                  label={courseItem.name}
-                  value={courseItem.name}
+                  label={`${courseItem.name} (${courseItem.code})`} // Display name and code
+                  value={courseItem.code} // Save only the course code
                 />
               ))}
             </Picker>

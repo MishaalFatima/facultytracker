@@ -11,13 +11,10 @@ import DropDownPicker from "react-native-dropdown-picker";
 import {
   collection,
   query,
-  where,
-  getDocs,
-  updateDoc,
-  addDoc,
-  serverTimestamp,
   orderBy,
-  limit,
+  getDocs,
+  onSnapshot,
+  where,
 } from "firebase/firestore";
 import { firestore } from "../firebaseConfig";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -25,321 +22,234 @@ import LoadingScreen from "../LoadingScreen";
 import { getAuth } from "firebase/auth";
 
 const FacultyList = () => {
-  const [facultyData, setFacultyData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("Available");
   const navigation = useNavigation();
   const route = useRoute();
-
-  // Read the facultyType parameter from route. Defaults to "both".
   const facultyTypeParam = route.params?.facultyType || "both";
 
-  // Dropdown filter states for Department.
+  // 1) Availability & user data
+  const [availabilityMap, setAvailabilityMap] = useState({});
+  const [facultyData, setFacultyData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // 2) Search + status toggle
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("Available");
+
+  // 3) Department dropdown state
   const [deptOpen, setDeptOpen] = useState(false);
   const [deptValue, setDeptValue] = useState("");
-  const [deptItems, setDeptItems] = useState([]);
+  const [deptItems, setDeptItems] = useState([
+    { label: "All Departments", value: "" },
+  ]);
+
+  // 4) Map of deptID → deptName
+  const [deptMap, setDeptMap] = useState({});
 
   const auth = getAuth();
   const currentUser = auth.currentUser;
-  const [currentUserAvailability, setCurrentUserAvailability] = useState(null);
 
-  // Mapping of faculty uid to their active availability status.
-  const [availabilityMap, setAvailabilityMap] = useState({});
-
-  // Fetch the current user's active availability document (without an endTime).
+  // A) Real-time availability listener
   useEffect(() => {
-    const fetchCurrentAvailability = async () => {
-      if (currentUser) {
-        try {
-          const availabilityQuery = query(
-            collection(firestore, "facultyAvailability"),
-            where("userId", "==", currentUser.uid),
-            where("endTime", "==", null),
-            orderBy("creationTime", "desc"),
-            limit(1)
-          );
-          const querySnapshot = await getDocs(availabilityQuery);
-          if (!querySnapshot.empty) {
-            const latestDoc = querySnapshot.docs[0];
-            setCurrentUserAvailability(latestDoc.data().availability);
-          }
-        } catch (error) {
-          console.error("Error fetching current user availability:", error);
+    const q = query(
+      collection(firestore, "facultyAvailability"),
+      orderBy("creationTime")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const map = {};
+      snap.forEach((doc) => {
+        const d = doc.data();
+        if (!("endTime" in d) || d.endTime === null) {
+          map[d.userId] = d.availability;
         }
+      });
+      setAvailabilityMap(map);
+    });
+    return () => unsub();
+  }, []);
+
+  // B) Fetch departments → build map & dropdown items
+  useEffect(() => {
+    const fetchDepts = async () => {
+      try {
+        const snap = await getDocs(collection(firestore, "departments"));
+        const map = {};
+        const items = [{ label: "All Departments", value: "" }];
+
+        snap.docs.forEach((doc) => {
+          const id = doc.id;
+          const name = (doc.data().name || "").trim();
+          map[id] = name;
+          items.push({ label: name, value: id });
+        });
+
+        setDeptMap(map);
+        setDeptItems(items);
+      } catch (err) {
+        console.error("Error fetching departments:", err);
       }
     };
-    fetchCurrentAvailability();
-  }, [currentUser]);
+    fetchDepts();
+  }, []);
 
-  // Fetch faculty data from the "users" collection.
+  // C) Fetch faculty **after** map is ready
   useEffect(() => {
+    if (!Object.keys(deptMap).length) return;
+
     const fetchFaculty = async () => {
+      setLoading(true);
       try {
-        let facultyQuery;
+        let q;
         if (facultyTypeParam === "both") {
-          facultyQuery = query(
+          q = query(
             collection(firestore, "users"),
             where("role", "==", "Faculty")
           );
         } else {
-          facultyQuery = query(
+          q = query(
             collection(firestore, "users"),
             where("role", "==", "Faculty"),
             where("FacultyType", "==", facultyTypeParam)
           );
         }
-        const snapshot = await getDocs(facultyQuery);
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          uid: doc.data().uid || "N/A",
-          name: doc.data().name || "N/A",
-          registrationNumber: doc.data().registrationNumber || "N/A",
-          department: doc.data().department || "N/A",
-          facultyType: doc.data().FacultyType || "N/A",
-        }));
+
+        const snap = await getDocs(q);
+        const data = snap.docs.map((doc) => {
+          const d = doc.data();
+          const deptId = d.department?.trim() || "";
+          return {
+            id: doc.id,
+            uid: d.uid || doc.id,
+            name: d.name || "N/A",
+            registrationNumber: d.registrationNumber || "N/A",
+            facultyType: d.FacultyType || "N/A",
+            departmentId: deptId,
+            departmentName: deptMap[deptId] || "Unknown Dept",
+          };
+        });
         setFacultyData(data);
-      } catch (error) {
-        console.log("Error fetching faculty data:", error);
+      } catch (err) {
+        console.error("Error fetching faculty:", err);
       } finally {
         setLoading(false);
       }
     };
 
     fetchFaculty();
-  }, [facultyTypeParam]);
+  }, [facultyTypeParam, deptMap]);
 
-  // Fetch active availability docs for all faculty and build a mapping (uid -> availability)
-  useEffect(() => {
-    const fetchActiveAvailabilities = async () => {
-      try {
-        const availabilityQuery = query(
-          collection(firestore, "facultyAvailability"),
-          where("endTime", "==", null)
-        );
-        const querySnapshot = await getDocs(availabilityQuery);
-        const map = {};
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          map[data.userId] = data.availability;
-        });
-        setAvailabilityMap(map);
-      } catch (error) {
-        console.error("Error fetching active availabilities:", error);
-      }
-    };
+  if (loading) return <LoadingScreen />;
 
-    fetchActiveAvailabilities();
-    // Refresh the availability mapping every 5 seconds for real-time updates.
-    const interval = setInterval(fetchActiveAvailabilities, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // D) Filters
+  let filtered = facultyData.filter((f) => {
+    const status = availabilityMap[f.uid] || "Unavailable";
+    return selectedStatus === "Available"
+      ? status === "Available"
+      : status === "Unavailable";
+  });
 
-  // Build department filter items from fetched faculty data.
-  useEffect(() => {
-    const departments = Array.from(
-      new Set(facultyData.map((faculty) => faculty.department))
-    );
-    const items = [
-      { label: "All Departments", value: "" },
-      ...departments.map((dept) => ({ label: dept, value: dept })),
-    ];
-    setDeptItems(items);
-  }, [facultyData]);
+  filtered = filtered.filter((f) =>
+    f.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  // Function to toggle availability for the current user.
-  const toggleAvailability = async () => {
-    if (!currentUser) {
-      console.error("User not authenticated");
-      return;
-    }
-    try {
-      // Query for the active document (without endTime) for the current user.
-      const availabilityQuery = query(
-        collection(firestore, "facultyAvailability"),
-        where("userId", "==", currentUser.uid),
-        where("endTime", "==", null),
-        orderBy("creationTime", "desc"),
-        limit(1)
-      );
-      const querySnapshot = await getDocs(availabilityQuery);
-      if (!querySnapshot.empty) {
-        const latestDoc = querySnapshot.docs[0];
-        const currentStatus = latestDoc.data().availability;
-        const toggledStatus =
-          currentStatus === "Available" ? "Unavailable" : "Available";
-        // Update the document with the toggled availability.
-        await updateDoc(latestDoc.ref, {
-          availability: toggledStatus,
-          toggleTime: serverTimestamp(),
-        });
-        console.log(`Availability toggled to ${toggledStatus}`);
-        setCurrentUserAvailability(toggledStatus);
-        // Update the availability map for the current user.
-        setAvailabilityMap((prev) => ({
-          ...prev,
-          [currentUser.uid]: toggledStatus,
-        }));
-      } else {
-        // No active document exists; create a new record.
-        await addDoc(collection(firestore, "facultyAvailability"), {
-          userId: currentUser.uid,
-          availability: "Available",
-          creationTime: serverTimestamp(),
-        });
-        console.log("Created new availability document with Available status");
-        setCurrentUserAvailability("Available");
-        setAvailabilityMap((prev) => ({
-          ...prev,
-          [currentUser.uid]: "Available",
-        }));
-      }
-    } catch (error) {
-      console.error("Error toggling availability:", error);
-    }
-  };
-
-  // Filtering logic.
-  let filteredFaculty = facultyData;
-
-  // For a Permanent view, filter by the active availability status.
-  if (facultyTypeParam === "Permanent") {
-    filteredFaculty = filteredFaculty.filter((faculty) => {
-      // Always show the current user so they can toggle their status.
-      if (faculty.uid === currentUser?.uid) {
-        return true;
-      }
-      // Get the active status from the availabilityMap; default to "Unavailable" if not found.
-      const status = availabilityMap[faculty.uid] || "Unavailable";
-      return selectedStatus === "Available"
-        ? status === "Available"
-        : status !== "Available";
-    });
+  if (deptValue) {
+    filtered = filtered.filter((f) => f.departmentId === deptValue);
   }
 
-  // Filter by search query.
-  filteredFaculty = filteredFaculty.filter((faculty) =>
-    faculty.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // Filter by department (if selected).
-  filteredFaculty = filteredFaculty.filter((faculty) =>
-    deptValue ? faculty.department === deptValue : true
-  );
-
-  // Render each faculty item.
+  // E) Render each item with two action buttons
   const renderItem = ({ item }) => {
-    // Determine active status: use current user's value if it's them; otherwise, use the availabilityMap.
-    const status =
-      item.uid === currentUser?.uid
-        ? currentUserAvailability
-        : availabilityMap[item.uid] || "Unavailable";
-
+    const status = availabilityMap[item.uid] || "Unavailable";
     return (
-      <TouchableOpacity
-        style={styles.listItem}
-        onPress={() => {
-          // For your flow: when an item is pressed, navigate to AttendanceRecord with that faculty's uid.
-          navigation.navigate("AttendanceRecord", { uid: item.uid });
-        }}
-      >
-        <Text style={styles.name}>Name: {item.name}</Text>
-        <Text>Registration Number: {item.registrationNumber}</Text>
-        <Text>Department: {item.department}</Text>
-        <Text>Faculty Type: {item.facultyType}</Text>
+      <View style={styles.listItem}>
+        <Text style={styles.name}>{item.name}</Text>
+        <Text>Reg: {item.registrationNumber}</Text>
+        <Text>Dept: {item.departmentName}</Text>
+        <Text>Type: {item.facultyType}</Text>
         {facultyTypeParam === "Permanent" && (
           <View style={styles.availabilityContainer}>
             <Text
               style={[
-                styles.availability,
+                styles.status,
                 { color: status === "Available" ? "green" : "red" },
               ]}
             >
               {status}
             </Text>
-            {item.uid === currentUser?.uid && (
-              <TouchableOpacity
-                style={styles.toggleButton}
-                onPress={toggleAvailability}
-              >
-                <Text style={styles.toggleButtonText}>Toggle</Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
-      </TouchableOpacity>
+
+        <View style={styles.buttonRow}>
+          {/* Pass deptValue (and uid if you need it) */}
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() =>
+              navigation.navigate("AttendanceRecord", {
+                deptValue: deptValue,
+                uid: item.uid, // optional
+              })
+            }
+          >
+            <Text style={styles.buttonText}>View Attendance</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => navigation.navigate("LocationTracking", {
+              deptValue: deptValue,
+            })}
+          >
+            <Text style={styles.buttonText}>Track Location</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   };
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Faculty List</Text>
+      <Text style={styles.title}>Faculty Availability</Text>
+
       <TextInput
-        style={styles.searchInput}
-        placeholder="Search Faculty..."
-        placeholderTextColor="#888"
+        style={styles.search}
+        placeholder="Search faculty..."
         value={searchQuery}
-        onChangeText={(text) => setSearchQuery(text)}
+        onChangeText={setSearchQuery}
       />
-      <View style={styles.dropdownContainer}>
-        <DropDownPicker
-          open={deptOpen}
-          value={deptValue}
-          items={deptItems}
-          setOpen={setDeptOpen}
-          setValue={setDeptValue}
-          setItems={setDeptItems}
-          placeholder="Select Department"
-          containerStyle={{ marginBottom: 10 }}
-        />
-      </View>
+
+      <DropDownPicker
+        open={deptOpen}
+        value={deptValue}
+        items={deptItems}
+        setOpen={setDeptOpen}
+        setValue={setDeptValue}
+        setItems={setDeptItems}
+        placeholder="Select Department"
+        style={styles.dropdown}
+        dropDownContainerStyle={{ borderColor: "#08422d" }}
+      />
+
       {facultyTypeParam === "Permanent" && (
-        <View style={styles.statusContainer}>
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              selectedStatus === "Available" && styles.selectedButton,
-            ]}
-            onPress={() => setSelectedStatus("Available")}
-          >
-            <Text
+        <View style={styles.filterContainer}>
+          {["Available", "Unavailable"].map((stat) => (
+            <TouchableOpacity
+              key={stat}
               style={[
-                styles.statusText,
-                selectedStatus === "Available" && styles.selectedText,
+                styles.filterButton,
+                selectedStatus === stat && styles.activeFilter,
               ]}
+              onPress={() => setSelectedStatus(stat)}
             >
-              Available
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.statusButton,
-              selectedStatus === "Not Available" && styles.selectedButton,
-            ]}
-            onPress={() => setSelectedStatus("Not Available")}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                selectedStatus === "Not Available" && styles.selectedText,
-              ]}
-            >
-              Not Available
-            </Text>
-          </TouchableOpacity>
+              <Text style={styles.filterText}>{stat}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       )}
+
       <FlatList
-        data={filteredFaculty}
+        data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.noDataText}>No faculty found.</Text>
+          <Text style={styles.empty}>No faculty found</Text>
         }
       />
     </View>
@@ -347,97 +257,55 @@ const FacultyList = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#fff",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 10,
-    textAlign: "center",
-    color: "#08422d",
-  },
-  searchInput: {
-    height: 50,
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  title: { fontSize: 24, fontWeight: "bold", color: "#08422d", marginBottom: 16 },
+  search: {
+    height: 40,
     borderColor: "#ccc",
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  dropdownContainer: {
-    zIndex: 1000,
-    marginBottom: 10,
-  },
-  statusContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 10,
-  },
-  statusButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "#08422d",
     borderRadius: 8,
-    marginHorizontal: 5,
+    padding: 8,
+    marginBottom: 12,
   },
-  selectedButton: {
-    backgroundColor: "#08422d",
+  dropdown: { borderColor: "#08422d", marginBottom: 12 },
+  filterContainer: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  filterButton: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#f0f0f0",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ccc",
   },
-  statusText: {
-    fontSize: 16,
-    color: "#08422d",
-  },
-  selectedText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  list: {
-    paddingVertical: 10,
-  },
+  activeFilter: { backgroundColor: "rgba(8,66,45,0.2)", borderColor: "#08422d" },
+  filterText: { color: "#08422d", fontWeight: "bold" },
+  list: { gap: 8 },
   listItem: {
-    padding: 15,
-    marginVertical: 5,
+    padding: 16,
+    borderRadius: 8,
+    backgroundColor: "#f8f8f8",
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 8,
-    backgroundColor: "#f9f9f9",
   },
-  name: {
-    fontWeight: "bold",
-    marginBottom: 5,
-    fontSize: 16,
-    color: "#08422d",
-  },
-  availabilityContainer: {
+  name: { fontSize: 16, fontWeight: "bold", color: "#08422d", marginBottom: 4 },
+  availabilityContainer: { marginTop: 8 },
+  status: { fontWeight: "bold" },
+  buttonRow: {
     flexDirection: "row",
-    alignItems: "center",
-    marginTop: 5,
+    justifyContent: "space-between",
+    marginTop: 12,
   },
-  availability: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  toggleButton: {
-    marginLeft: 10,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    backgroundColor: "#08422d",
+  smallButton: {
+    flex: 1,
+    padding: 8,
+    marginHorizontal: 4,
     borderRadius: 5,
+    backgroundColor: "#08422d",
+    alignItems: "center",
   },
-  toggleButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  noDataText: {
-    textAlign: "center",
-    color: "#888",
-    marginTop: 10,
-  },
+  buttonText: { color: "#fff", fontSize: 14 },
+  empty: { textAlign: "center", color: "#666", marginTop: 20 },
 });
 
 export default FacultyList;

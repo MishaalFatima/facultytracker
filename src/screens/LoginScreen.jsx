@@ -16,9 +16,14 @@ import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import LoadingScreen from "./LoadingScreen";
 
+
+
+
 const LoginScreen = ({ navigation }) => {
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -81,10 +86,10 @@ const LoginScreen = ({ navigation }) => {
           // Navigate based on role
           switch (userData.role) {
             case "Faculty":
-              if (userData.FacultyType === "Permanent") {
-                navigation.reset({ index: 0, routes: [{ name: "FacultyDashboard" }] });
-              }
-              Alert.alert("Login Successful", `Welcome Respected ${userData.role}`);
+              await AsyncStorage.setItem("userRole", userData.role);
+              await AsyncStorage.setItem("FacultyType", userData.FacultyType);
+              navigation.reset({ index: 0, routes: [{ name: "FacultyDashboard" }] });
+              Alert.alert("Login Successful", "Welcome Respected " + userData.role);
               setLoading(false); 
               break;
             case "CR/GR":
@@ -94,7 +99,7 @@ const LoginScreen = ({ navigation }) => {
               break;
             case "Principal":
               navigation.reset({ index: 0, routes: [{ name: "PrincipalDashboard" }] });
-              Alert.alert("Login Successful", `Welcome Respected ${userData.role}`);
+              Alert.alert("Login Successful", "Welcome Respected " + userData.role);
               setLoading(false); 
               break;
             case "Admin":
@@ -151,16 +156,24 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         <Text style={styles.label}>Enter Password</Text>
-        <View style={styles.inputContainer}>
-          <Icon name="lock" size={24} color="#08422d" style={styles.icon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={(text) => setPassword(text)}
-            secureTextEntry
+      <View style={styles.inputContainer}>
+        <Icon name="lock" size={24} color="#08422d" style={styles.icon} />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!isPasswordVisible}
+        />
+        <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+          <Icon 
+            name={isPasswordVisible ? "visibility-off" : "visibility"} // ✅ Using MaterialIcons eye icon
+            size={24} 
+            color="#08422d" 
+            style={styles.icon} 
           />
-        </View>
+        </TouchableOpacity>
+      </View>
 
         <TouchableOpacity style={styles.button} onPress={handleLogin}>
           <Text style={styles.buttonText}>Sign in</Text>
@@ -242,7 +255,7 @@ const styles = StyleSheet.create({
   },
   signUpLink: {
     textDecorationLine: "underline",
-    color: "#08422d",
+    color: "red",
     fontWeight: "bold",
   },
 });

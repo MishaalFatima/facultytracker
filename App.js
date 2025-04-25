@@ -5,6 +5,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./src/screens/firebaseConfig";
 
+// Import Notifications and set the notification handler.
+import * as Notifications from "expo-notifications";
+
+// Configure notifications to display alerts even in the foreground.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
 import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
 import CRGRDashboard from "./src/screens/crgr_dashboard/CRGRDashboardScreen";
@@ -25,6 +37,10 @@ import AttendanceRecord from "./src/screens/Principaldashboard/AttendanceRecord"
 import Timetable from "./src/screens/Principaldashboard/Timetable";
 import DailyAttendaceReport from "./src/screens/Principaldashboard/DailyAttendaceReport";
 import AllUsers from "./src/screens/Principaldashboard/AllUsers";
+import UpdateAttendance from "./src/screens/AdminDashboard/UpdateAttendance";
+import UpdateUserList from "./src/screens/AdminDashboard/UpdateUserList";
+import EditAvailabilityModal from "./src/screens/AdminDashboard/EditAvailabilityModal";
+import RoomList from "./src/screens/AdminDashboard/RoomList";
 
 const Stack = createStackNavigator();
 
@@ -89,8 +105,10 @@ export default function App() {
         <Stack.Screen name="Timetable" component={Timetable} /> 
         <Stack.Screen name="DailyAttendaceReport" component={DailyAttendaceReport} />
         <Stack.Screen name="AllUsers" component={AllUsers} />
-
-         
+        <Stack.Screen name="UpdateAttendance" component={UpdateAttendance} />
+        <Stack.Screen name="UpdateUserList" component={UpdateUserList} />
+        <Stack.Screen name="EditAvailabilityModal" component={EditAvailabilityModal} />
+        <Stack.Screen name="RoomList" component={RoomList} />
       </Stack.Navigator>
     </NavigationContainer>
   );
