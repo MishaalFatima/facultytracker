@@ -9,12 +9,20 @@ import {
   Image,
   Alert,
 } from "react-native";
-import { getFirestore, doc, updateDoc } from "firebase/firestore";
+import { Picker } from "@react-native-picker/picker";
+import {
+  getFirestore,
+  doc,
+  updateDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 import {
   getAuth,
   updateEmail,
   EmailAuthProvider,
-  sendEmailVerification,
   reauthenticateWithCredential,
   updatePassword,
 } from "firebase/auth";
@@ -31,191 +39,167 @@ const EditProfileScreen = ({ navigation }) => {
 
   const roleFields = {
     Principal: [
-      "name",
-      "email",
-      "currentPassword",
-      "newPassword",
-      "gender",
-      "registrationNumber",
-      "campusName",
-      "phoneNumber",
-      "designation",
-      "imageUrl",
+      "name","email","currentPassword","newPassword","gender",
+      "registrationNumber","campusName","phoneNumber","designation","imageUrl",
     ],
     Faculty: [
-      "name",
-      "email",
-      "currentPassword",
-      "newPassword",
-      "gender",
-      "registrationNumber",
-      "campusName",
-      "phoneNumber",
-      "designation",
-      "FacultyType",
-      "department",
-      "imageUrl",
+      "name","email","currentPassword","newPassword","gender",
+      "registrationNumber","campusName","phoneNumber","designation",
+      "FacultyType","department","imageUrl",
     ],
     "CR/GR": [
-      "name",
-      "email",
-      "currentPassword",
-      "newPassword",
-      "gender",
-      "registrationNumber",
-      "campusName",
-      "phoneNumber",
-      "department",
-      "programName",
-      "session",
+      "name","email","currentPassword","newPassword","gender",
+      "registrationNumber","campusName","phoneNumber",
+      "department","program","session",
     ],
     Admin: [
-      "name",
-      "email",
-      "currentPassword",
-      "newPassword",
-      "gender",
-      "campusName",
-      "phoneNumber",
-      "registrationNumber",
+      "name","email","currentPassword","newPassword","gender",
+      "registrationNumber","phoneNumber","imageUrl",
     ],
   };
 
-  // Initialize formData with current profile info plus password fields
+  const genderOptions = [
+    { label: "Male", value: "Male" },
+    { label: "Female", value: "Female" },
+    { label: "Other", value: "Other" },
+  ];
+
   const [formData, setFormData] = useState({
     ...profile,
     currentPassword: "",
     newPassword: "",
   });
-
   const [errors, setErrors] = useState({});
+  const [departments, setDepartments] = useState([]);
+  const [programs, setPrograms] = useState([]);
 
+  // Keep only role‐specific fields in formData
   useEffect(() => {
     if (!profile.role) return;
-    const allowedFields = roleFields[profile.role] || [];
-    setFormData((prevData) => {
-      return allowedFields.reduce((acc, field) => {
-        acc[field] = prevData[field] || "";
-        return acc;
-      }, {});
+    const allowed = roleFields[profile.role] || [];
+    setFormData(prev => {
+      const trimmed = {};
+      allowed.forEach(f => {
+        trimmed[f] = prev[f] ?? "";
+      });
+      return trimmed;
     });
   }, [profile.role]);
 
-  const validateFields = () => {
-    let newErrors = {};
+  // Load departments for dropdown
+  useEffect(() => {
+    (async () => {
+      const snap = await getDocs(collection(db, "departments"));
+      setDepartments(
+        snap.docs.map(d => ({ label: d.data().name, value: d.id }))
+      );
+    })();
+  }, []);
 
-    // Validate all fields except newPassword (which is optional)
-    Object.keys(formData).forEach((key) => {
-      if (!formData[key]?.trim() && key !== "newPassword") {
+  // Load programs for selected department (top‐level "programs" collection)
+  useEffect(() => {
+    if (profile.role !== "CR/GR" || !formData.department) {
+      setPrograms([]);
+      return;
+    }
+    (async () => {
+      try {
+        const q = query(
+          collection(db, "programs"),
+          where("departmentId", "==", formData.department)
+        );
+        const snap = await getDocs(q);
+        setPrograms(
+          snap.docs.map(d => ({
+            label: d.data().name,
+            value: d.id,
+          }))
+        );
+      } catch (err) {
+        console.error("Error fetching programs:", err);
+        setPrograms([]);
+      }
+    })();
+  }, [formData.department, profile.role]);
+
+  const validateFields = () => {
+    const newErrors = {};
+    Object.keys(formData).forEach(key => {
+      if (!formData[key]?.toString().trim() && key !== "newPassword") {
         newErrors[key] = "This field is required";
       }
     });
-
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Invalid email format";
     }
-
     if (formData.newPassword && formData.newPassword.length < 6) {
-      newErrors.newPassword = "New password must be at least 6 characters long";
+      newErrors.newPassword = "New password must be at least 6 characters";
     }
-
     if (formData.phoneNumber && !/^\+923\d{9}$/.test(formData.phoneNumber)) {
-      newErrors.phoneNumber =
-        "Phone number must start with +923 and have 13 digits.";
+      newErrors.phoneNumber = "Phone must start with +923 and have 13 digits";
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (key, value) => {
-    setFormData((prevData) => ({ ...prevData, [key]: value }));
-  };
+  const handleChange = (key, value) =>
+    setFormData(prev => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
     if (!validateFields()) {
       Alert.alert("Validation Error", "Please fix the errors before saving.");
       return;
     }
-
     const user = auth.currentUser;
-    const userId = user?.uid;
-
-    if (!userId) {
+    if (!user) {
       Alert.alert("Error", "User not found!");
       return;
     }
-
     try {
-      // Reauthenticate using the current password
       if (formData.currentPassword) {
-        const credential = EmailAuthProvider.credential(
+        const cred = EmailAuthProvider.credential(
           user.email,
           formData.currentPassword
         );
-        await reauthenticateWithCredential(user, credential);
+        await reauthenticateWithCredential(user, cred);
       }
-
-      // Update password in Firebase Auth (if provided)
       if (formData.newPassword) {
         await updatePassword(user, formData.newPassword);
       }
-
-      // Update email in Firebase Auth if it was changed
       if (formData.email !== user.email) {
-        console.log("Updating email in Firebase Auth...");
         await updateEmail(user, formData.email);
-        console.log("Email updated successfully in Firebase Auth");
       }
-
-      // Prepare updated data for Firestore (updating existing "password" field)
-      const { currentPassword, newPassword, ...updateData } = formData;
-
-      // If newPassword exists, add it to Firestore's existing "password" field
-      if (formData.newPassword) {
-        updateData.password = formData.newPassword;
-      }
-
-      const docRef = doc(db, "users", userId);
-      await updateDoc(docRef, updateData);
+      const { currentPassword, newPassword, ...toUpdate } = formData;
+      if (newPassword) toUpdate.password = newPassword;
+      await updateDoc(doc(db, "users", user.uid), toUpdate);
 
       Alert.alert("Success", "Profile updated successfully!");
       navigation.goBack();
-    } catch (error) {
-      console.log("Error updating profile:", error);
-      Alert.alert("Error", error.message);
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", err.message);
     }
   };
 
   const handlePickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
     });
-
     if (!result.canceled) {
-      const selectedImage = result.assets[0].uri;
-      uploadImage(selectedImage);
-    }
-  };
-
-  const uploadImage = async (uri) => {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const imageRef = ref(
-        storage,
-        `profile_images/${auth.currentUser.uid}.jpg`
-      );
-      await uploadBytes(imageRef, blob);
-      const downloadURL = await getDownloadURL(imageRef);
-      setFormData((prevData) => ({ ...prevData, imageUrl: downloadURL }));
-      Alert.alert("Success", "Image uploaded successfully");
-    } catch (error) {
-      Alert.alert("Error", "Failed to upload image");
-      console.error(error);
+      try {
+        const resp = await fetch(result.assets[0].uri);
+        const blob = await resp.blob();
+        const imgRef = ref(storage, `profile_images/${auth.currentUser.uid}.jpg`);
+        await uploadBytes(imgRef, blob);
+        const url = await getDownloadURL(imgRef);
+        setFormData(prev => ({ ...prev, imageUrl: url }));
+        Alert.alert("Success", "Image uploaded successfully");
+      } catch {
+        Alert.alert("Error", "Failed to upload image");
+      }
     }
   };
 
@@ -223,7 +207,7 @@ const EditProfileScreen = ({ navigation }) => {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Edit Profile</Text>
 
-      {(profile.role === "Faculty" || profile.role === "Principal") && (
+      {["Faculty", "Principal", "Admin"].includes(profile.role) && (
         <>
           <Image
             source={{
@@ -240,55 +224,130 @@ const EditProfileScreen = ({ navigation }) => {
         </>
       )}
 
-      {/* Current Password Field */}
+      {/* Current & New Password */}
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Current Password</Text>
         <TextInput
           style={[styles.input, errors.currentPassword && styles.inputError]}
           value={formData.currentPassword}
-          onChangeText={(text) => handleChange("currentPassword", text)}
           secureTextEntry
+          onChangeText={t => handleChange("currentPassword", t)}
         />
         {errors.currentPassword && (
           <Text style={styles.errorText}>{errors.currentPassword}</Text>
         )}
       </View>
-
-      {/* New Password Field */}
       <View style={styles.inputContainer}>
         <Text style={styles.label}>New Password</Text>
         <TextInput
           style={[styles.input, errors.newPassword && styles.inputError]}
           value={formData.newPassword}
-          onChangeText={(text) => handleChange("newPassword", text)}
           secureTextEntry
+          onChangeText={t => handleChange("newPassword", t)}
         />
         {errors.newPassword && (
           <Text style={styles.errorText}>{errors.newPassword}</Text>
         )}
       </View>
 
-      {/* Other fields */}
-      {Object.keys(formData).map(
-        (key) =>
-          key !== "imageUrl" &&
-          key !== "currentPassword" &&
-          key !== "newPassword" && (
+      {roleFields[profile.role]?.map(key => {
+        if (["imageUrl","currentPassword","newPassword"].includes(key)) return null;
+
+        if (key === "department") {
+          return (
             <View key={key} style={styles.inputContainer}>
-              <Text style={styles.label}>
-                {key.replace(/([A-Z])/g, " $1").trim()}
-              </Text>
-              <TextInput
-                style={[styles.input, errors[key] && styles.inputError]}
-                value={formData[key]}
-                onChangeText={(text) => handleChange(key, text)}
-              />
-              {errors[key] && (
-                <Text style={styles.errorText}>{errors[key]}</Text>
+              <Text style={styles.label}>Department</Text>
+              <View style={styles.pickerWrapper}>
+                <Picker
+                  selectedValue={formData.department}
+                  onValueChange={val => handleChange("department", val)}
+                >
+                  <Picker.Item label="Select department..." value="" />
+                  {departments.map(dep => (
+                    <Picker.Item
+                      key={dep.value}
+                      label={dep.label}
+                      value={dep.value}
+                    />
+                  ))}
+                </Picker>
+              </View>
+              {errors.department && (
+                <Text style={styles.errorText}>{errors.department}</Text>
               )}
             </View>
-          )
-      )}
+          );
+        }
+
+        if (key === "program") {
+          return (
+            <View key={key} style={styles.inputContainer}>
+              <Text style={styles.label}>Program</Text>
+              <View style={styles.pickerWrapper}>
+                <Picker
+                  selectedValue={formData.program}
+                  onValueChange={val => handleChange("program", val)}
+                >
+                  <Picker.Item label="Select program..." value="" />
+                  {programs.map(p => (
+                    <Picker.Item
+                      key={p.value}
+                      label={p.label}
+                      value={p.value}
+                    />
+                  ))}
+                </Picker>
+              </View>
+              {errors.program && (
+                <Text style={styles.errorText}>{errors.program}</Text>
+              )}
+            </View>
+          );
+        }
+
+        if (key === "gender") {
+          return (
+            <View key={key} style={styles.inputContainer}>
+              <Text style={styles.label}>Gender</Text>
+              <View style={styles.pickerWrapper}>
+                <Picker
+                  selectedValue={formData.gender}
+                  onValueChange={val => handleChange("gender", val)}
+                >
+                  <Picker.Item label="Select gender..." value="" />
+                  {genderOptions.map(g => (
+                    <Picker.Item
+                      key={g.value}
+                      label={g.label}
+                      value={g.value}
+                    />
+                  ))}
+                </Picker>
+              </View>
+              {errors.gender && (
+                <Text style={styles.errorText}>{errors.gender}</Text>
+              )}
+            </View>
+          );
+        }
+
+        // All other fields
+        return (
+          <View key={key} style={styles.inputContainer}>
+            <Text style={styles.label}>
+              {key.replace(/([A-Z])/g, " $1").trim()}
+            </Text>
+            <TextInput
+              style={[styles.input, errors[key] && styles.inputError]}
+              value={formData[key]}
+              onChangeText={t => handleChange(key, t)}
+            />
+            {errors[key] && (
+              <Text style={styles.errorText}>{errors[key]}</Text>
+            )}
+          </View>
+        );
+      })}
 
       <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
         <Text style={styles.saveButtonText}>Save Changes</Text>
@@ -298,11 +357,7 @@ const EditProfileScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: 20,
-    backgroundColor: "#f0f0f0",
-  },
+  container: { flexGrow: 1, padding: 20, backgroundColor: "#f0f0f0" },
   title: {
     fontSize: 22,
     fontWeight: "bold",
@@ -324,13 +379,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
-  uploadButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  inputContainer: {
-    marginBottom: 12,
-  },
+  uploadButtonText: { color: "#fff", fontWeight: "bold" },
+  inputContainer: { marginBottom: 12 },
   label: {
     fontSize: 16,
     fontWeight: "bold",
@@ -344,14 +394,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ccc",
   },
-  inputError: {
-    borderColor: "red",
+  pickerWrapper: {
+    backgroundColor: "#fff",
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "#ccc",
   },
-  errorText: {
-    color: "red",
-    fontSize: 12,
-    marginTop: 2,
-  },
+  inputError: { borderColor: "red" },
+  errorText: { color: "red", fontSize: 12, marginTop: 2 },
   saveButton: {
     backgroundColor: "#08422d",
     paddingVertical: 12,
@@ -359,11 +409,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 20,
   },
-  saveButtonText: {
-    fontSize: 18,
-    color: "#fff",
-    fontWeight: "bold",
-  },
+  saveButtonText: { fontSize: 18, color: "#fff", fontWeight: "bold" },
 });
 
 export default EditProfileScreen;

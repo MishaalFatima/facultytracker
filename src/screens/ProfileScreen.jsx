@@ -1,107 +1,135 @@
 import React, { useState, useCallback } from "react";
-import { 
-  View, Text, Image, ActivityIndicator, StyleSheet, TouchableOpacity, ScrollView 
+import {
+  View,
+  Text,
+  Image,
+  ActivityIndicator,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 const ProfileScreen = () => {
-  const auth = getAuth();
-  const db = getFirestore();
-  const userId = auth.currentUser?.uid;
+  const auth       = getAuth();
+  const db         = getFirestore();
+  const uid        = auth.currentUser?.uid;
   const navigation = useNavigation();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async () => {
-    if (userId) {
-      const docRef = doc(db, "users", userId);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setProfile(docSnap.data());
-      } else {
-        console.log("No profile found");
-      }
+    if (!uid) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+    try {
+      const userSnap = await getDoc(doc(db, "users", uid));
+      if (!userSnap.exists()) {
+        console.warn("No profile for UID:", uid);
+        setLoading(false);
+        return;
+      }
+      const data = userSnap.data();
+
+      // load departmentName & programName
+      if (data.department) {
+        const dep = await getDoc(doc(db, "departments", data.department));
+        data.departmentName = dep.exists() ? dep.data().name : data.department;
+      }
+      if (data.program) {
+        const prog = await getDoc(doc(db, "programs", data.program));
+        data.programName = prog.exists() ? prog.data().name : data.program;
+      }
+
+      setProfile(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true); // Show loading while fetching data
+      setLoading(true);
       fetchProfile();
-    }, [userId])
+    }, [uid])
   );
 
-  if (loading) {
-    return <ActivityIndicator size="large" color="#08422d" style={styles.loader} />;
-  }
+  if (loading) return <ActivityIndicator style={styles.loader} size="large" />;
+  if (!profile) return <Text style={styles.errorText}>Profile not found</Text>;
 
-  if (!profile) {
-    return <Text style={styles.errorText}>Profile not found</Text>;
-  }
+  // Prepare fields
+  const commonFields = [
+    { key: "name",               label: "Name" },
+    { key: "email",              label: "Email" },
+    { key: "role",               label: "Role" },
+    { key: "registrationNumber", label: "Reg. No." },
+    { key: "campusName",         label: "Campus" },
+    { key: "gender",             label: "Gender" },
+    { key: "password",           label: "Password" },
+  ];
+
+  const roleFieldsMap = {
+    Admin: [
+      { key: "phoneNumber", label: "Phone No." },
+      { key: "uid",         label: "Admin ID" },
+    ],
+    Principal: [
+      { key: "phoneNumber", label: "Phone No." },
+    ],
+    "CR/GR": [
+      { key: "phoneNumber",    label: "Phone No." },
+      { key: "departmentName", label: "Department" },
+      { key: "programName",    label: "Program" },
+      { key: "semester",       label: "Semester" },
+      { key: "session",        label: "Session" },
+    ],
+    Faculty: [
+      { key: "phoneNumber",    label: "Phone No." },
+      { key: "departmentName", label: "Department" },
+      { key: "designation",    label: "Designation" },
+      { key: "FacultyType",    label: "Faculty Type" },
+    ],
+  };
+
+  const fieldsToShow = [
+    ...commonFields,
+    ...(roleFieldsMap[profile.role] || [])
+  ].filter(f => profile[f.key] != null);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Profile Image */}
-      <View style={styles.profileHeader}>
+      {/* Heading */}
+      <Text style={styles.heading}>Profile</Text>
+
+      {/* Avatar */}
+      <View style={styles.avatarContainer}>
         <Image
-          source={{ uri: profile.imageUrl || "https://via.placeholder.com/150" }}
-          style={styles.profileImage}
+          source={{
+            uri: profile.imageUrl || "https://via.placeholder.com/120"
+          }}
+          style={styles.avatar}
         />
-        <Text style={styles.name}>{profile.name}</Text>
-        <Text style={styles.email}>{profile.email}</Text>
       </View>
 
-      {/* Profile Details */}
-      <View style={styles.profileCard}>
-        <ProfileDetail label="Gender" value={profile.gender} />
-        <ProfileDetail label="Role" value={profile.role} />
-        <ProfileDetail label="Registration No" value={profile.registrationNumber} />
-        <ProfileDetail label="Campus" value={profile.campusName} />
-        <ProfileDetail label="Password" value={profile.password} />
-
-        {/* Role-Specific Fields */}
-        {profile.role === "Faculty" && (
-          <>
-            <ProfileDetail label="Phone No" value={profile.phoneNumber} />
-            <ProfileDetail label="Designation" value={profile.designation} />
-            <ProfileDetail label="Department" value={profile.department} />
-            <ProfileDetail label="Faculty Type" value={profile.FacultyType} />
-          </>
-        )}
-
-        {profile.role === "CR/GR" && (
-          <>
-            <ProfileDetail label="Phone No" value={profile.phoneNumber} />
-            <ProfileDetail label="Department" value={profile.department} />
-            <ProfileDetail label="Program" value={profile.programName} />
-            <ProfileDetail label="Session" value={profile.session} />
-          </>
-        )}
-
-        {profile.role === "Principal" && (
-          <>
-            <ProfileDetail label="Phone No" value={profile.phoneNumber} />
-            <ProfileDetail label="Designation" value={profile.designation} />
-            <ProfileDetail label="Campus" value={profile.campusName} />
-          </>
-        )}
-
-        {profile.role === "Admin" && (
-          <>
-            <ProfileDetail label="Phone No" value={profile.phoneNumber} />
-            <ProfileDetail label="Admin ID" value={profile.uid || "N/A"} />
-          </>
-        )}
+      {/* All fields in one card */}
+      <View style={styles.card}>
+        {fieldsToShow.map(f => (
+          <Detail key={f.key} label={f.label} value={profile[f.key]} />
+        ))}
       </View>
 
       {/* Edit Profile Button */}
-      <TouchableOpacity 
-        style={styles.editButton} 
-        onPress={() => navigation.navigate("EditProfileScreen", { profile })}
+      <TouchableOpacity
+        style={styles.editButton}
+        onPress={() =>
+          navigation.navigate("EditProfileScreen", { profile })
+        }
       >
         <Text style={styles.editButtonText}>Edit Profile</Text>
       </TouchableOpacity>
@@ -109,94 +137,70 @@ const ProfileScreen = () => {
   );
 };
 
-/** Component to display profile details */
-const ProfileDetail = ({ label, value }) => (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>{label}:</Text>
-    <Text style={styles.detailValue}>{value || "N/A"}</Text>
+const Detail = ({ label, value }) => (
+  <View style={styles.row}>
+    <Text style={styles.label}>{label}:</Text>
+    <Text style={styles.value}>{value}</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
+  container:       {
     padding: 20,
+    alignItems: "center",
     backgroundColor: "#f0f0f0",
-    alignItems: "center",
   },
-  profileHeader: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: "#08422d",
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#08422d",
-  },
-  email: {
-    fontSize: 16,
-    color: "#555",
-    marginBottom: 10,
-  },
-  profileCard: {
-    width: "100%",
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 5,
-    marginBottom: 20,
-  },
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
-    paddingVertical: 8,
-  },
-  detailLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#08422d",
-  },
-  detailValue: {
-    fontSize: 16,
-    color: "#333",
-  },
-  editButton: {
-    backgroundColor: "#08422d",
-    paddingVertical: 12,
-    paddingHorizontal: 40,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 30,
-  },
-  editButtonText: {
-    fontSize: 18,
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  loader: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  errorText: {
-    fontSize: 18,
-    textAlign: "center",
-    marginTop: 20,
-    color: "red",
-  },
+  loader:          { flex: 1, justifyContent: "center" },
+  errorText:       { color: "red", marginTop: 20 },
+  heading:         {
+                     fontSize: 24,
+                     fontWeight: "bold",
+                     color: "#08422d",
+                     marginBottom: 20,
+                   },
+  avatarContainer: {
+                     height: 140,
+                     justifyContent: "center",
+                     alignItems: "center",
+                     marginBottom: 20,
+                   },
+  avatar:          {
+                     width: 120,
+                     height: 120,
+                     borderRadius: 60,
+                     borderWidth: 2,
+                     borderColor: "#08422d",
+                   },
+  card:            {
+                     width: "100%",
+                     backgroundColor: "#fff",
+                     padding: 15,
+                     borderRadius: 10,
+                     marginBottom: 20,
+                     elevation: 3,
+                   },
+  row:             {
+                     flexDirection: "row",
+                     justifyContent: "space-between",
+                     marginBottom: 8,
+                   },
+  label:           {
+                     fontWeight: "bold",
+                     color: "#08422d",
+                   },
+  value:           { color: "#333" },
+  editButton:      {
+                     backgroundColor: "#08422d",
+                     paddingVertical: 12,
+                     paddingHorizontal: 30,
+                     borderRadius: 8,
+                     marginBottom: 30,
+                   },
+  editButtonText:  {
+                     color: "#fff",
+                     fontSize: 16,
+                     fontWeight: "bold",
+                   },
 });
 
 export default ProfileScreen;

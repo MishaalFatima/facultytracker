@@ -1,74 +1,174 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
   ActivityIndicator,
-  Alert 
+  Alert,
+  Image,
+  ScrollView
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import DropDownPicker from 'react-native-dropdown-picker';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { Picker } from '@react-native-picker/picker';
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  query,
+  where
+} from 'firebase/firestore';
 import { firestore } from '../firebaseConfig';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import * as ImagePicker from 'expo-image-picker';
+
+const roleFields = {
+  Admin: [
+    'name',
+    'email',
+    'gender',
+    'registrationNumber',
+    'phoneNumber',
+    'imageUrl'
+  ],
+  Faculty: [
+    'name',
+    'email',
+    'gender',
+    'registrationNumber',
+    'phoneNumber',
+    'designation',
+    'FacultyType',
+    'department',
+    'imageUrl'
+  ],
+  'CR/GR': [
+    'name',
+    'email',
+    'gender',
+    'registrationNumber',
+    'phoneNumber',
+    'department',
+    'program',
+    'session',
+    'semester'
+  ],
+  Principal: [
+    'name',
+    'email',
+    'gender',
+    'registrationNumber',
+    'campusName',
+    'phoneNumber',
+    'designation',
+    'imageUrl'
+  ]
+};
+
+const genderOptions = ['Male', 'Female', 'Other'];
+
+// Regex for numeric-only fields
+const numericFieldRegex = /(phoneNumber|registrationNumber)/;
 
 const UpdateUserList = () => {
-  const route = useRoute();
+  const { userId } = useRoute().params;
   const navigation = useNavigation();
-  const { userId } = route.params;
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  
-  const [userData, setUserData] = useState({
-    name: '',
-    email: '',
-    role: '',
-    department: '',
-    designation: ''
-  });
 
-  const [roleOpen, setRoleOpen] = useState(false);
-  const [roleItems] = useState([
-    { label: 'Admin', value: 'Admin' },
-    { label: 'Faculty', value: 'Faculty' },
-    { label: 'CR/GR', value: 'CR/GR' },
-    { label: 'Principal', value: 'Principal' }
-  ]);
+  const [userData, setUserData] = useState({});
+  const [departments, setDepartments] = useState([]);
+  const [programs, setPrograms] = useState([]);
 
+  // Load user data & departments
   useEffect(() => {
-    const fetchUserData = async () => {
+    const load = async () => {
       try {
-        const userDoc = await getDoc(doc(firestore, 'users', userId));
-        if (userDoc.exists()) {
-          setUserData(userDoc.data());
-        } else {
+        const udoc = await getDoc(doc(firestore, 'users', userId));
+        if (!udoc.exists()) {
           Alert.alert('Error', 'User not found');
-          navigation.goBack();
+          return navigation.goBack();
         }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to load user data');
+        setUserData(udoc.data());
+
+        const depSnap = await getDocs(collection(firestore, 'departments'));
+        setDepartments(
+          depSnap.docs.map(d => ({
+            label: d.data().name,
+            value: d.id
+          }))
+        );
+      } catch (e) {
+        Alert.alert('Error', 'Failed to load data');
       } finally {
         setLoading(false);
       }
     };
+    load();
+  }, [userId, navigation]);
 
-    fetchUserData();
-  }, [userId]);
-
-  const handleUpdate = async () => {
-    if (!userData.name || !userData.role) {
-      Alert.alert('Validation Error', 'Name and Role are required');
+  // Reload programs when department changes (for CR/GR)
+  useEffect(() => {
+    if (userData.role !== 'CR/GR' || !userData.department) {
+      setPrograms([]);
       return;
     }
+    (async () => {
+      try {
+        const q = query(
+          collection(firestore, 'programs'),
+          where('departmentId', '==', userData.department)
+        );
+        const snap = await getDocs(q);
+        setPrograms(
+          snap.docs.map(d => ({
+            label: d.data().name,
+            value: d.id
+          }))
+        );
+      } catch {
+        setPrograms([]);
+      }
+    })();
+  }, [userData.department, userData.role]);
 
+  // Image picker + upload
+  const handlePickImage = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8
+    });
+    if (res.canceled) return;
+    try {
+      const blob = await (await fetch(res.assets[0].uri)).blob();
+      const storage = getStorage();
+      const imgRef = ref(storage, `profile_images/${userId}.jpg`);
+      await uploadBytes(imgRef, blob);
+      const url = await getDownloadURL(imgRef);
+      setUserData(prev => ({ ...prev, imageUrl: url }));
+      Alert.alert('Success', 'Image uploaded');
+    } catch {
+      Alert.alert('Error', 'Failed to upload');
+    }
+  };
+
+  // Save updates
+  const handleUpdate = async () => {
+    if (!userData.name || !userData.email) {
+      return Alert.alert('Validation', 'Name & email are required');
+    }
     setUpdating(true);
     try {
       await updateDoc(doc(firestore, 'users', userId), userData);
-      Alert.alert('Success', 'User updated successfully');
+      Alert.alert('Success', 'User updated');
       navigation.navigate('AllUsers', { refresh: true });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update user');
+    } catch {
+      Alert.alert('Error', 'Failed to update');
     } finally {
       setUpdating(false);
     }
@@ -76,136 +176,196 @@ const UpdateUserList = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.loading}>
         <ActivityIndicator size="large" color="#08422d" />
       </View>
     );
   }
 
+  const fields = roleFields[userData.role] || [];
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Edit User</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.header}>Edit {userData.role}</Text>
 
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          style={styles.input}
-          value={userData.name}
-          onChangeText={(text) => setUserData({ ...userData, name: text })}
-        />
-      </View>
+      {/* Image upload */}
+      {fields.includes('imageUrl') && (
+        <>
+          <Image
+            source={{
+              uri: userData.imageUrl || 'https://via.placeholder.com/100'
+            }}
+            style={styles.avatar}
+          />
+          <TouchableOpacity style={styles.uploadBtn} onPress={handlePickImage}>
+            <Text style={styles.uploadTxt}>Change Image</Text>
+          </TouchableOpacity>
+        </>
+      )}
 
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Role</Text>
-        <DropDownPicker
-          open={roleOpen}
-          value={userData.role}
-          items={roleItems}
-          setOpen={setRoleOpen}
-          setValue={(value) => setUserData({ ...userData, role: value })}
-          style={styles.dropdown}
-          dropDownContainerStyle={styles.dropdownList}
-        />
-      </View>
+      {fields.map(key => {
+        if (key === 'imageUrl') return null;
 
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Department</Text>
-        <TextInput
-          style={styles.input}
-          value={userData.department}
-          onChangeText={(text) => setUserData({ ...userData, department: text })}
-        />
-      </View>
+        // department picker
+        if (key === 'department') {
+          return (
+            <View key={key} style={styles.field}>
+              <Text style={styles.label}>Department</Text>
+              <Picker
+                selectedValue={userData.department}
+                onValueChange={val =>
+                  setUserData(prev => ({ ...prev, department: val }))
+                }
+              >
+                <Picker.Item label="Select…" value="" />
+                {departments.map(d => (
+                  <Picker.Item key={d.value} label={d.label} value={d.value} />
+                ))}
+              </Picker>
+            </View>
+          );
+        }
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.buttonText}>Cancel</Text>
-        </TouchableOpacity>
+        // program picker
+        if (key === 'program') {
+          return (
+            <View key={key} style={styles.field}>
+              <Text style={styles.label}>Program</Text>
+              <Picker
+                selectedValue={userData.program}
+                onValueChange={val =>
+                  setUserData(prev => ({ ...prev, program: val }))
+                }
+              >
+                <Picker.Item label="Select…" value="" />
+                {programs.map(p => (
+                  <Picker.Item key={p.value} label={p.label} value={p.value} />
+                ))}
+              </Picker>
+            </View>
+          );
+        }
 
-        <TouchableOpacity
-          style={[styles.button, styles.saveButton]}
-          onPress={handleUpdate}
-          disabled={updating}
-        >
-          {updating ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </View>
+        // gender picker
+        if (key === 'gender') {
+          return (
+            <View key={key} style={styles.field}>
+              <Text style={styles.label}>Gender</Text>
+              <Picker
+                selectedValue={userData.gender}
+                onValueChange={val =>
+                  setUserData(prev => ({ ...prev, gender: val }))
+                }
+              >
+                <Picker.Item label="Select…" value="" />
+                {genderOptions.map(g => (
+                  <Picker.Item key={g} label={g} value={g} />
+                ))}
+              </Picker>
+            </View>
+          );
+        }
+
+        // text inputs
+        return (
+          <View key={key} style={styles.field}>
+            <Text style={styles.label}>
+              {key
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase())
+                .trim()}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={userData[key]?.toString() || ''}
+              onChangeText={t =>
+                setUserData(prev => ({ ...prev, [key]: t }))
+              }
+              keyboardType={
+                numericFieldRegex.test(key) ? 'numeric' : 'default'
+              }
+            />
+          </View>
+        );
+      })}
+
+      <TouchableOpacity
+        style={styles.saveBtn}
+        onPress={handleUpdate}
+        disabled={updating}
+      >
+        {updating ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.saveTxt}>Save Changes</Text>
+        )}
+      </TouchableOpacity>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      padding: 20,
-      backgroundColor: '#fff',
-    },
-    header: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: '#08422d',
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    formGroup: {
-      marginBottom: 15,
-    },
-    label: {
-      fontSize: 16,
-      color: '#08422d',
-      marginBottom: 5,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: '#08422d',
-      borderRadius: 5,
-      padding: 10,
-      fontSize: 16,
-    },
-    disabledInput: {
-      backgroundColor: '#f0f0f0',
-    },
-    dropdown: {
-      borderColor: '#08422d',
-    },
-    dropdownContainer: {
-      borderColor: '#08422d',
-      marginTop: 5,
-    },
-    buttonContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginTop: 20,
-    },
-    button: {
-      borderRadius: 5,
-      padding: 15,
-      width: '48%',
-      alignItems: 'center',
-    },
-    cancelButton: {
-      backgroundColor: '#ccc',
-    },
-    saveButton: {
-      backgroundColor: '#08422d',
-    },
-    buttonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: 'bold',
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
-  
-  export default UpdateUserList;
+  container: {
+    padding: 20,
+    backgroundColor: '#fafafa'
+  },
+  loading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#08422d',
+    marginBottom: 20,
+    textAlign: 'center'
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignSelf: 'center',
+    marginBottom: 10
+  },
+  uploadBtn: {
+    backgroundColor: '#08422d',
+    padding: 10,
+    borderRadius: 6,
+    alignSelf: 'center',
+    marginBottom: 20
+  },
+  uploadTxt: {
+    color: '#fff',
+    fontWeight: '600'
+  },
+  field: {
+    marginBottom: 15
+  },
+  label: {
+    fontSize: 16,
+    color: '#08422d',
+    marginBottom: 5
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    padding: 10
+  },
+  saveBtn: {
+    backgroundColor: '#08422d',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10
+  },
+  saveTxt: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold'
+  }
+});
+
+export default UpdateUserList;

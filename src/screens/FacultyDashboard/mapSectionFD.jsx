@@ -39,8 +39,14 @@ const MapSectionFD = () => {
   const notificationIntervalRef = useRef(null);
 
   const universityCoordinates = {
-    latitude: 32.424264,
-    longitude: 74.113631,
+    
+
+    // Latitude:  32.28070,
+    // Longitude:  72.29422, 
+
+    latitude: 32.284516,
+    longitude: 72.289539,
+
     radius: 0.005,
   };
 

@@ -19,36 +19,32 @@ import {
 import { firestore } from "../firebaseConfig";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import LoadingScreen from "../LoadingScreen";
-import { getAuth } from "firebase/auth";
 
 const FacultyList = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const facultyTypeParam = route.params?.facultyType || "both";
 
-  // 1) Availability & user data
+  // Availability & user data
   const [availabilityMap, setAvailabilityMap] = useState({});
   const [facultyData, setFacultyData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 2) Search + status toggle
+  // Search + status toggle
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("Available");
 
-  // 3) Department dropdown state
+  // Department dropdown state
   const [deptOpen, setDeptOpen] = useState(false);
   const [deptValue, setDeptValue] = useState("");
   const [deptItems, setDeptItems] = useState([
     { label: "All Departments", value: "" },
   ]);
 
-  // 4) Map of deptID → deptName
+  // Map of deptID → deptName
   const [deptMap, setDeptMap] = useState({});
 
-  const auth = getAuth();
-  const currentUser = auth.currentUser;
-
-  // A) Real-time availability listener
+  // Real-time availability listener
   useEffect(() => {
     const q = query(
       collection(firestore, "facultyAvailability"),
@@ -67,7 +63,7 @@ const FacultyList = () => {
     return () => unsub();
   }, []);
 
-  // B) Fetch departments → build map & dropdown items
+  // Fetch departments → build map & dropdown items
   useEffect(() => {
     const fetchDepts = async () => {
       try {
@@ -91,7 +87,7 @@ const FacultyList = () => {
     fetchDepts();
   }, []);
 
-  // C) Fetch faculty **after** map is ready
+  // Fetch faculty **after** map is ready
   useEffect(() => {
     if (!Object.keys(deptMap).length) return;
 
@@ -100,22 +96,24 @@ const FacultyList = () => {
       try {
         let q;
         if (facultyTypeParam === "both") {
+          // Attendance view: both Permanent & Visiting
           q = query(
             collection(firestore, "users"),
             where("role", "==", "Faculty")
           );
         } else {
+          // Location view: only Permanent
           q = query(
             collection(firestore, "users"),
             where("role", "==", "Faculty"),
-            where("FacultyType", "==", facultyTypeParam)
+            where("FacultyType", "==", "Permanent")
           );
         }
 
         const snap = await getDocs(q);
         const data = snap.docs.map((doc) => {
           const d = doc.data();
-          const deptId = d.department?.trim() || "";
+          const deptId = (d.department || "").trim();
           return {
             id: doc.id,
             uid: d.uid || doc.id,
@@ -139,23 +137,32 @@ const FacultyList = () => {
 
   if (loading) return <LoadingScreen />;
 
-  // D) Filters
-  let filtered = facultyData.filter((f) => {
-    const status = availabilityMap[f.uid] || "Unavailable";
-    return selectedStatus === "Available"
-      ? status === "Available"
-      : status === "Unavailable";
+  // Filters
+  let filtered = facultyData;
+
+  // → only filter by availability when in "Permanent" (location) mode
+  if (facultyTypeParam === "Permanent") {
+    filtered = filtered.filter((f) => {
+      const status = availabilityMap[f.uid] || "Unavailable";
+      return selectedStatus === "Available"
+        ? status === "Available"
+        : status === "Unavailable";
+    });
+  }
+
+  // search‐by‐name (always)
+  filtered = filtered.filter((f) => {
+    const name = (f.name ?? "").toLowerCase();
+    const query = (searchQuery ?? "").toLowerCase();
+    return name.includes(query);
   });
 
-  filtered = filtered.filter((f) =>
-    f.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
+  // department filter (always)
   if (deptValue) {
     filtered = filtered.filter((f) => f.departmentId === deptValue);
   }
 
-  // E) Render each item with two action buttons
+  // Render each item with conditional buttons
   const renderItem = ({ item }) => {
     const status = availabilityMap[item.uid] || "Unavailable";
     return (
@@ -164,6 +171,8 @@ const FacultyList = () => {
         <Text>Reg: {item.registrationNumber}</Text>
         <Text>Dept: {item.departmentName}</Text>
         <Text>Type: {item.facultyType}</Text>
+
+        {/* Only show availability badge in Permanent (location) view */}
         {facultyTypeParam === "Permanent" && (
           <View style={styles.availabilityContainer}>
             <Text
@@ -178,26 +187,35 @@ const FacultyList = () => {
         )}
 
         <View style={styles.buttonRow}>
-          {/* Pass deptValue (and uid if you need it) */}
-          <TouchableOpacity
-            style={styles.smallButton}
-            onPress={() =>
-              navigation.navigate("AttendanceRecord", {
-                deptValue: deptValue,
-                uid: item.uid, // optional
-              })
-            }
-          >
-            <Text style={styles.buttonText}>View Attendance</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.smallButton}
-            onPress={() => navigation.navigate("LocationTracking", {
-              deptValue: deptValue,
-            })}
-          >
-            <Text style={styles.buttonText}>Track Location</Text>
-          </TouchableOpacity>
+          {/* “View Attendance” only for the Attendance view */}
+          {facultyTypeParam === "both" && (
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() =>
+                navigation.navigate("AttendanceRecord", {
+                  deptValue,
+                  uid: item.uid,
+                })
+              }
+            >
+              <Text style={styles.buttonText}>View Attendance</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* “Track Location” only in the Location view */}
+          {facultyTypeParam === "Permanent" && (
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() =>
+                navigation.navigate("AvailabilityReport", {
+                  deptValue,
+                  uid: item.uid,
+                })
+              }
+            >
+              <Text style={styles.buttonText}>Track Location</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -205,7 +223,11 @@ const FacultyList = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Faculty Availability</Text>
+      <Text style={styles.title}>
+        {facultyTypeParam === "both"
+          ? "All Faculty Members"
+          : "Faculty Availability"}
+      </Text>
 
       <TextInput
         style={styles.search}
@@ -226,6 +248,7 @@ const FacultyList = () => {
         dropDownContainerStyle={{ borderColor: "#08422d" }}
       />
 
+      {/* Only show availability‐status toggles in Location view */}
       {facultyTypeParam === "Permanent" && (
         <View style={styles.filterContainer}>
           {["Available", "Unavailable"].map((stat) => (
@@ -258,7 +281,12 @@ const FacultyList = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "#fff" },
-  title: { fontSize: 24, fontWeight: "bold", color: "#08422d", marginBottom: 16 },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#08422d",
+    marginBottom: 16,
+  },
   search: {
     height: 40,
     borderColor: "#ccc",
@@ -278,7 +306,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ccc",
   },
-  activeFilter: { backgroundColor: "rgba(8,66,45,0.2)", borderColor: "#08422d" },
+  activeFilter: {
+    backgroundColor: "rgba(8,66,45,0.2)",
+    borderColor: "#08422d",
+  },
   filterText: { color: "#08422d", fontWeight: "bold" },
   list: { gap: 8 },
   listItem: {
@@ -288,7 +319,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
-  name: { fontSize: 16, fontWeight: "bold", color: "#08422d", marginBottom: 4 },
+  name: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#08422d",
+    marginBottom: 4,
+  },
   availabilityContainer: { marginTop: 8 },
   status: { fontWeight: "bold" },
   buttonRow: {

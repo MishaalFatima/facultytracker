@@ -169,4 +169,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CourseList;
+export default CourseList; 
