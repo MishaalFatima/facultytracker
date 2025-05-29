@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { firestore } from "../firebaseConfig";
 import { getAuth } from "firebase/auth";
-import LockScreenModal from "./LockScreenModal"; // Adjust the path as needed
+import LockScreenModal from "./LockScreenModal";
 
 const MapSectionFD = () => {
   const [location, setLocation] = useState(null);
@@ -41,11 +41,11 @@ const MapSectionFD = () => {
   const universityCoordinates = {
     
 
-    // Latitude:  32.28070,
-    // Longitude:  72.29422, 
+    // Latitude:  33.28070,
+    // Longitude:  74.29422, 
 
-    latitude: 32.284516,
-    longitude: 72.289539,
+    latitude: 32.28083120112945,
+    longitude: 72.2942282524965,
 
     radius: 0.005,
   };

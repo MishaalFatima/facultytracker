@@ -1,3 +1,4 @@
+// AdminDashboard.js
 import React, { useState, useCallback } from "react";
 import {
   View,
@@ -17,14 +18,16 @@ import { collection, getCountFromServer } from "firebase/firestore";
 const AdminDashboard = ({ navigation }) => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuActive, setMenuActive] = useState(false);
-  const [totalUsers, setTotalUsers] = useState(0); // state for user count
+
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const toggleMenu = () => {
     setMenuVisible(!menuVisible);
     setMenuActive(!menuActive);
   };
 
-  // Reset the menu state every time this screen is focused
+  // Reset menu whenever screen regains focus
   useFocusEffect(
     useCallback(() => {
       setMenuVisible(false);
@@ -32,26 +35,34 @@ const AdminDashboard = ({ navigation }) => {
     }, [])
   );
 
+  // Fetch counts when screen is focused
   useFocusEffect(
     useCallback(() => {
-      const fetchUserCount = async () => {
+      const fetchCounts = async () => {
         try {
+          // Approved users
           const usersRef = collection(firestore, "users");
-          const countSnapshot = await getCountFromServer(usersRef);
-          setTotalUsers(countSnapshot.data().count);
+          const usersSnap = await getCountFromServer(usersRef);
+          setTotalUsers(usersSnap.data().count);
+
+          // Pending sign-up requests
+          const pendingRef = collection(firestore, "pendingRequests");
+          const pendingSnap = await getCountFromServer(pendingRef);
+          setPendingCount(pendingSnap.data().count);
         } catch (error) {
-          console.error("Error fetching user count:", error);
+          console.error("Error fetching counts:", error);
           setTotalUsers(0);
+          setPendingCount(0);
         }
       };
 
-      fetchUserCount();
+      fetchCounts();
     }, [])
   );
 
   return (
     <ScrollView style={styles.container}>
-      {/* Top Bar with Hamburger Menu */}
+      {/* Top Bar */}
       <View style={styles.header}>
         <Text style={styles.title}>Admin Panel</Text>
         <TouchableHighlight onPress={toggleMenu} underlayColor="#fdcc0d">
@@ -64,19 +75,22 @@ const AdminDashboard = ({ navigation }) => {
         </TouchableHighlight>
       </View>
 
-      {/* Hamburger Menu Modal */}
+      {/* Hamburger Menu */}
       <Modal
         visible={menuVisible}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={toggleMenu}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.menu}>
-            {/* User Account Management */}
+            {/* User Management */}
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate("AllUsers")}
+              onPress={() => {
+                toggleMenu();
+                navigation.navigate("AllUsers");
+              }}
               underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
@@ -88,7 +102,10 @@ const AdminDashboard = ({ navigation }) => {
             {/* Department List */}
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate("DepaertmentList")}
+              onPress={() => {
+                toggleMenu();
+                navigation.navigate("DepaertmentList");
+              }}
               underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
@@ -97,10 +114,13 @@ const AdminDashboard = ({ navigation }) => {
               </View>
             </TouchableHighlight>
 
-            {/* Room List Option added under Department List */}
+            {/* Room List */}
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate("RoomList")}
+              onPress={() => {
+                toggleMenu();
+                navigation.navigate("RoomList");
+              }}
               underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
@@ -109,10 +129,30 @@ const AdminDashboard = ({ navigation }) => {
               </View>
             </TouchableHighlight>
 
+            {/* Pending Requests */}
+            <TouchableHighlight
+              style={styles.menuItem}
+              onPress={() => {
+                toggleMenu();
+                navigation.navigate("PendingRequests");
+              }}
+              underlayColor="#fdcc0d"
+            >
+              <View style={styles.menuItemContent}>
+                <MaterialIcons name="hourglass-empty" size={24} color="#08422d" />
+                <Text style={styles.menuText}>
+                  Pending Requests ({pendingCount})
+                </Text>
+              </View>
+            </TouchableHighlight>
+
             {/* View Profile */}
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate("ProfileScreen")}
+              onPress={() => {
+                toggleMenu();
+                navigation.navigate("ProfileScreen");
+              }}
               underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
@@ -121,9 +161,10 @@ const AdminDashboard = ({ navigation }) => {
               </View>
             </TouchableHighlight>
 
+            {/* Logout */}
             <Logout variant="menu" />
 
-            {/* Close Menu Item */}
+            {/* Close */}
             <TouchableHighlight
               style={styles.menuItem}
               onPress={toggleMenu}
@@ -138,12 +179,16 @@ const AdminDashboard = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* Main Content */}
+      {/* Dashboard Overview */}
       <View style={[styles.section, styles.firstSection]}>
         <Text style={styles.sectionTitle}>Dashboard Overview</Text>
         <Text style={styles.sectionText}>Total Users: {totalUsers}</Text>
+        <Text style={styles.sectionText}>
+          Pending Requests: {pendingCount}
+        </Text>
       </View>
 
+      {/* Reports Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Reports</Text>
         <TouchableHighlight
@@ -167,6 +212,7 @@ const AdminDashboard = ({ navigation }) => {
         </TouchableHighlight>
       </View>
 
+      {/* Timetable Management */}
       <TouchableOpacity
         style={styles.section}
         onPress={() => navigation.navigate("Timetable")}
@@ -179,67 +225,18 @@ const AdminDashboard = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "white",
-  },
+  container: { flex: 1, backgroundColor: "white" },
   header: {
-    flexDirection: "row", // Align items horizontally
-    alignItems: "center", // Vertically center the items
-    justifyContent: "space-between", // Pushes the title to the left and the menu icon to the right
-    padding: 15,
-    elevation: 2,
-    paddingTop: 25,
-  },
-  title: {
-    color: "#08422d",
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "left", // Align the title text to the left
-  },
-  menuIcon: {
-    marginLeft: "auto", // Ensures the menu icon is aligned to the right
-  },
-  section: {
-    marginBottom: 24,
-    marginHorizontal: 16, // Add horizontal margin
-    padding: 20,
-    backgroundColor: "#f8f8f8",
-    borderRadius: 10,
-    borderColor: "#08422d",
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  firstSection: {
-    marginTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 12,
-    color: "#08422d",
-  },
-  sectionText: {
-    color: "#08422d",
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  button: {
-    backgroundColor: "#08422d",
-    padding: 12,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    padding: 15,
+    paddingTop: 25,
+    elevation: 2,
   },
-  buttonText: {
-    color: "white",
-    fontSize: 16,
-  },
-  buttonSpacing: {
-    marginTop: 10,
-  },
+  title: { color: "#08422d", fontSize: 24, fontWeight: "bold" },
+  menuIcon: { marginLeft: "auto" },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -253,21 +250,31 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "flex-start",
   },
-  menuItem: {
-    flexDirection: "row",
-    paddingVertical: 12,
-    width: "100%",
+  menuItem: { flexDirection: "row", paddingVertical: 12, width: "100%" },
+  menuItemContent: { flexDirection: "row", alignItems: "center" },
+  menuText: { fontSize: 18, color: "#08422d", marginLeft: 10 },
+
+  firstSection: { marginTop: 16 },
+  section: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    padding: 20,
+    backgroundColor: "#f8f8f8",
+    borderRadius: 10,
+    borderColor: "#08422d",
+    borderWidth: 1,
+    elevation: 3,
+  },
+  sectionTitle: { fontSize: 20, fontWeight: "bold", color: "#08422d" },
+  sectionText: { fontSize: 16, color: "#08422d", marginTop: 8 },
+
+  button: {
+    backgroundColor: "#08422d",
+    padding: 12,
     alignItems: "center",
   },
-  menuItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  menuText: {
-    fontSize: 18,
-    color: "#08422d",
-    marginLeft: 10, // Space between icon and text
-  },
+  buttonText: { color: "#fff", fontSize: 16 },
+  buttonSpacing: { marginTop: 10 },
 });
 
 export default AdminDashboard;

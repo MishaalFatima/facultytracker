@@ -19,6 +19,7 @@ Notifications.setNotificationHandler({
 
 import LoginScreen from "./src/screens/LoginScreen";
 import SignUpScreen from "./src/screens/SignUpScreen";
+import PendingRequests from "./src/screens/AdminDashboard/PendingRequests";
 import CRGRDashboard from "./src/screens/crgr_dashboard/CRGRDashboardScreen";
 import FacultyDashboard from "./src/screens/FacultyDashboard/FacultyDashboard";
 import AdminDashboard from "./src/screens/AdminDashboard/AdminDashboard";
@@ -35,12 +36,12 @@ import EditProfileScreen from "./src/screens/EditProfileScreen";
 import TimetableForm from "./src/screens/crgr_dashboard/TimetableForm";
 import AttendanceRecord from "./src/screens/Principaldashboard/AttendanceRecord";
 import Timetable from "./src/screens/Principaldashboard/Timetable";
-import DailyAttendaceReport from "./src/screens/Principaldashboard/DailyAttendaceReport";
 import AllUsers from "./src/screens/Principaldashboard/AllUsers";
 import UpdateAttendance from "./src/screens/AdminDashboard/UpdateAttendance";
 import UpdateUserList from "./src/screens/AdminDashboard/UpdateUserList";
 import EditAvailabilityModal from "./src/screens/AdminDashboard/EditAvailabilityModal";
 import RoomList from "./src/screens/AdminDashboard/RoomList";
+import AttendanceRecordVF from "./src/screens/FacultyDashboard/AttendanceRecordVF";
 
 const Stack = createStackNavigator();
 
@@ -103,12 +104,13 @@ export default function App() {
         <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />   
         <Stack.Screen name="AttendanceRecord" component={AttendanceRecord} />
         <Stack.Screen name="Timetable" component={Timetable} /> 
-        <Stack.Screen name="DailyAttendaceReport" component={DailyAttendaceReport} />
         <Stack.Screen name="AllUsers" component={AllUsers} />
         <Stack.Screen name="UpdateAttendance" component={UpdateAttendance} />
         <Stack.Screen name="UpdateUserList" component={UpdateUserList} />
         <Stack.Screen name="EditAvailabilityModal" component={EditAvailabilityModal} />
         <Stack.Screen name="RoomList" component={RoomList} />
+        <Stack.Screen name="PendingRequests" component={PendingRequests} />
+        <Stack.Screen name="AttendanceRecordVF" component={AttendanceRecordVF} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -12,12 +12,12 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { auth, firestore } from "../firebaseConfig";
 import { useNavigation } from "@react-navigation/native";
 
-const QRScannerScreen = ({ route }) => {
+const QRScannerScreen = ({ route,navigation }) => {
   const { timetable } = route.params; // Receive timetable data
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
-  const navigation = useNavigation(); // Get navigation object
+  // const navigation = useNavigation(); // Get navigation object
 
   useEffect(() => {
     const getCameraPermissions = async () => {

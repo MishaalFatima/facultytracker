@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   ScrollView,
@@ -30,6 +30,7 @@ const FacultyDashboard = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
+      // Close menu whenever the screen gains focus
       setMenuVisible(false);
       setMenuActive(false);
     }, [])
@@ -59,6 +60,7 @@ const FacultyDashboard = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* Top Bar */}
       <View style={styles.topBar}>
         <Text style={styles.title}>Faculty Dashboard</Text>
         <TouchableHighlight onPress={toggleMenu} underlayColor="#fdcc0d">
@@ -71,6 +73,7 @@ const FacultyDashboard = ({ navigation }) => {
         </TouchableHighlight>
       </View>
 
+      {/* Menu Modal */}
       <Modal
         visible={menuVisible}
         transparent={true}
@@ -79,9 +82,13 @@ const FacultyDashboard = ({ navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.menu}>
+            {/* Mark Attendance */}
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate("FacultyTimetable")}
+              onPress={() => {
+                toggleMenu();
+                navigation.navigate("FacultyTimetable");
+              }}
               underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
@@ -90,9 +97,13 @@ const FacultyDashboard = ({ navigation }) => {
               </View>
             </TouchableHighlight>
 
+            {/* View Profile */}
             <TouchableHighlight
               style={styles.menuItem}
-              onPress={() => navigation.navigate("ProfileScreen")}
+              onPress={() => {
+                toggleMenu();
+                navigation.navigate("ProfileScreen");
+              }}
               underlayColor="#fdcc0d"
             >
               <View style={styles.menuItemContent}>
@@ -101,8 +112,27 @@ const FacultyDashboard = ({ navigation }) => {
               </View>
             </TouchableHighlight>
 
+            {/* Attendance Record – only for permanent faculty */}
+            {facultyType !== "Visiting" && (
+              <TouchableHighlight
+                style={styles.menuItem}
+                onPress={() => {
+                  toggleMenu();
+                  navigation.navigate("AttendanceRecordVF");
+                }}
+                underlayColor="#fdcc0d"
+              >
+                <View style={styles.menuItemContent}>
+                  <MaterialIcons name="history" size={24} color="#08422d" />
+                  <Text style={styles.menuText}>Attendance Record</Text>
+                </View>
+              </TouchableHighlight>
+            )}
+
+            {/* Logout */}
             <Logout variant="menu" />
 
+            {/* Close Menu */}
             <TouchableHighlight
               style={styles.menuItem}
               onPress={toggleMenu}
@@ -117,9 +147,14 @@ const FacultyDashboard = ({ navigation }) => {
         </View>
       </Modal>
 
+      {/* Main Content */}
       <ScrollView style={styles.scrollContainer}>
         <ProfileSectionFD />
+
+        {/* Visiting faculty sees their special record view here */}
         {facultyType === "Visiting" && <AttendanceRecordVF />}
+
+        {/* Permanent faculty sees map + GPS controls */}
         {facultyType !== "Visiting" && (
           <>
             <MapSectionFD />

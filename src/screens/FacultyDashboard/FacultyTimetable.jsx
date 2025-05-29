@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,111 +9,150 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { auth, firestore } from "../firebaseConfig";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+} from "firebase/firestore";
 import Icon from "react-native-vector-icons/Feather";
 
-// Helper function to convert a time string into a Date object for today.
-// Supports both 12-hour (with AM/PM) and 24-hour formats.
+// Helper: Convert "1:00 PM" to a Date object for today
 const getTodayTime = (timeStr) => {
   const now = new Date();
-  if (timeStr.toUpperCase().includes("AM") || timeStr.toUpperCase().includes("PM")) {
-    const [time, modifier] = timeStr.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
-    if (modifier.toUpperCase() === "PM" && hours !== 12) hours += 12;
-    if (modifier.toUpperCase() === "AM" && hours === 12) hours = 0;
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
-  } else {
-    const [hours, minutes] = timeStr.split(":").map(Number);
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+  const up = timeStr.toUpperCase();
+  if (up.includes("AM") || up.includes("PM")) {
+    const [t, mod] = timeStr.split(" ");
+    let [h, m] = t.split(":").map(Number);
+    if (mod === "PM" && h !== 12) h += 12;
+    if (mod === "AM" && h === 12) h = 0;
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
   }
+  const [h, m] = timeStr.split(":").map(Number);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
 };
 
-const FacultyTimetable = ({ navigation }) => {
+const FacultyTimetable=({ navigation }) =>{
   const [timetable, setTimetable] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [enabledTimeslot, setEnabledTimeslot] = useState(null);
+  const [scannedSlots, setScannedSlots] = useState(new Set());
 
-  // Update current time every minute (or every second for testing).
+  // Update current time every minute
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000); // Change to 1000 for testing if needed
-    return () => clearInterval(timer);
+    const id = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(id);
   }, []);
 
-  // Fetch timetable from Firestore for the current faculty.
   useEffect(() => {
-    const fetchTimetable = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const timetableQuery = query(
-            collection(firestore, "timetables"),
-            where("facultyId", "==", user.uid)
-          );
-          const querySnapshot = await getDocs(timetableQuery);
-          const timetableData = querySnapshot.docs.map((doc) => doc.data());
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert("Not logged in");
+      setLoading(false);
+      return;
+    }
 
-          if (timetableData.length === 0) {
-            Alert.alert("No Timetable", "No timetable found for this faculty.");
-          }
-          setTimetable(timetableData);
-        }
-      } catch (error) {
-        Alert.alert("Error", "Failed to fetch timetable.");
-        console.error("Error fetching timetable:", error);
+    const today = new Date().toLocaleDateString("en-US", {
+      weekday: "long",
+    });
+
+    const loadTimetable = async () => {
+      try {
+        const ttQ = query(
+          collection(firestore, "timetables"),
+          where("facultyId", "==", user.uid)
+        );
+        const ttSnap = await getDocs(ttQ);
+        const allSlots = ttSnap.docs.map((d) => d.data());
+
+        const current = new Date();
+        const sorted = allSlots.sort((a, b) => {
+          const aIsToday = a.day === today;
+          const bIsToday = b.day === today;
+
+          const aStart = getTodayTime(a.startTime);
+          const aEnd = getTodayTime(a.endTime);
+          const bStart = getTodayTime(b.startTime);
+          const bEnd = getTodayTime(b.endTime);
+
+          const aInWindow = aIsToday && current >= aStart && current <= aEnd;
+          const bInWindow = bIsToday && current >= bStart && current <= bEnd;
+
+          if (aInWindow && !bInWindow) return -1;
+          if (!aInWindow && bInWindow) return 1;
+
+          return aStart - bStart;
+        });
+
+        setTimetable(sorted);
+      } catch (err) {
+        console.error(err);
+        Alert.alert("Error", "Failed to load timetable");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTimetable();
+    // Listen for real-time attendance updates
+    const attQ = query(
+      collection(firestore, "attendance"),
+      where("facultyId", "==", user.uid),
+      where("day", "==", today)
+    );
+
+    const unsubscribe = onSnapshot(attQ, (snapshot) => {
+      const keys = new Set(
+        snapshot.docs.map((d) => {
+          const { expectedRoom, startTime, endTime } = d.data();
+          return `${expectedRoom}|${startTime}|${endTime}`;
+        })
+      );
+      setScannedSlots(keys);
+    });
+
+    loadTimetable();
+
+    return () => unsubscribe();
   }, []);
 
-  // Determine if any class scheduled for today is currently active.
-  useEffect(() => {
-    const todayName = currentTime.toLocaleDateString("en-US", { weekday: "long" });
-    const active = timetable.find((item) => {
-      if (item.day !== todayName) return false;
-      const start = getTodayTime(item.startTime);
-      const end = getTodayTime(item.endTime);
-      return currentTime >= start && currentTime <= end;
-    });
-    setEnabledTimeslot(active || null);
-  }, [currentTime, timetable]);
-
   const renderItem = ({ item }) => {
-    const todayName = currentTime.toLocaleDateString("en-US", { weekday: "long" });
-    const isToday = item.day === todayName;
-    const classStartTime = getTodayTime(item.startTime);
-    const classEndTime = getTodayTime(item.endTime);
+    const today = currentTime.toLocaleDateString("en-US", {
+      weekday: "long",
+    });
+    const isToday = item.day === today;
+    const start = getTodayTime(item.startTime);
+    const end = getTodayTime(item.endTime);
+    const inWindow = isToday && currentTime >= start && currentTime <= end;
 
-    // Disable the camera if it's not today or the current time is outside the class window.
-    const disableCamera = !isToday || currentTime < classStartTime || currentTime > classEndTime;
+    const slotKey = `${item.roomNumber}|${item.startTime}|${item.endTime}`;
+    const already = scannedSlots.has(slotKey);
+
+    const disable = !(inWindow && !already);
 
     return (
-      <View style={styles.timetableItem}>
-        <View>
-          <Text style={styles.timetableText}>
-            {item.day} - {item.course} ({item.startTime} - {item.endTime})
+      <View
+        style={[
+          styles.item,
+          inWindow && !already && styles.currentSlotHighlight,
+        ]}
+      >
+        <View style={styles.info}>
+          <Text style={styles.text}>
+            {item.day} – {item.course} ({item.startTime}–{item.endTime})
           </Text>
-          <Text style={styles.timetableText}>Room: {item.roomNumber}</Text>
+          <Text style={styles.text}>Room: {item.roomNumber}</Text>
+          {already && <Text style={styles.scanned}>✓ Already scanned</Text>}
         </View>
         <TouchableOpacity
           onPress={() => {
-            if (!disableCamera) {
+            if (!disable) {
               navigation.navigate("QRScannerScreen", { timetable: item });
             }
           }}
-          disabled={disableCamera}
+          disabled={disable}
         >
-          <Icon
-            name="camera"
-            size={24}
-            color={disableCamera ? "#ccc" : "#08422d"}
-            style={styles.cameraIcon}
-          />
+          <Icon name="camera" size={28} color={disable ? "#ccc" : "#08422d"} />
         </TouchableOpacity>
       </View>
     );
@@ -121,64 +160,40 @@ const FacultyTimetable = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#08422d" />
       </View>
     );
   }
 
-  // If an enabled timeslot exists, reorder the timetable array so it comes first.
-  let sortedTimetable = timetable;
-  if (enabledTimeslot) {
-    sortedTimetable = [
-      enabledTimeslot,
-      ...timetable.filter(
-        (item) =>
-          // Compare based on a unique combination of fields.
-          !(item.day === enabledTimeslot.day &&
-            item.course === enabledTimeslot.course &&
-            item.startTime === enabledTimeslot.startTime &&
-            item.endTime === enabledTimeslot.endTime)
-      ),
-    ];
-  }
-
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={sortedTimetable}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={renderItem}
-      />
-    </View>
+    <FlatList
+      style={styles.list}
+      data={timetable}
+      keyExtractor={(_, i) => i.toString()}
+      renderItem={renderItem}
+    />
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  timetableItem: {
+  list: { flex: 1, padding: 20 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  item: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    padding: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
-    marginBottom: 10,
+    borderColor: "#ccc",
   },
-  cameraIcon: {
-    marginLeft: 10,
-  },
-  timetableText: {
-    fontSize: 16,
-    color: "#08422d",
+  info: { flex: 1 },
+  text: { fontSize: 16, color: "#08422d" },
+  scanned: { marginTop: 4, fontSize: 14, color: "green" },
+  currentSlotHighlight: {
+    backgroundColor: "#e0f7ef",
+    borderLeftWidth: 4,
+    borderLeftColor: "#08422d",
+    paddingLeft: 10,
   },
 });
 

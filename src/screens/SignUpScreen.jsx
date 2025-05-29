@@ -14,16 +14,23 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { Picker } from "@react-native-picker/picker";
+import DropDownPicker from "react-native-dropdown-picker";
 import * as ImagePicker from "expo-image-picker";
-import { firestore, storage } from "./firebaseConfig";
-import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { getAuth, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import LoadingScreen from "./LoadingScreen";
 import NetInfo from "@react-native-community/netinfo";
 
+import { firestore, storage } from "./firebaseConfig";
+import {
+  doc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
 const SignUpScreen = ({ navigation }) => {
-  // Basic form states
+  // --- Form state ---
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
@@ -38,156 +45,75 @@ const SignUpScreen = ({ navigation }) => {
   const [FacultyType, setFacultyType] = useState("");
   const [image, setImage] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
 
-  // Dropdown data for CR/GR and Faculty roles
+  // --- Dropdown data ---
   const [department, setDepartment] = useState("");
   const [program, setProgram] = useState("");
-  // New field: CR/GR Semester
   const [crgrSemester, setCrgrSemester] = useState("");
-
+  const [openDept, setOpenDept] = useState(false);
+  const [openProg, setOpenProg] = useState(false);
   const [departmentsList, setDepartmentsList] = useState([]);
   const [programsList, setProgramsList] = useState([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
 
-  // Monitor internet connectivity
+  // Monitor connectivity
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      setIsConnected(state.isConnected);
-    });
-    return () => unsubscribe();
+    const unsub = NetInfo.addEventListener((state) =>
+      setIsConnected(state.isConnected)
+    );
+    return () => unsub();
   }, []);
 
-  // Fetch departments from Firestore
+  // Fetch departments
   useEffect(() => {
-    const fetchDepartments = async () => {
+    (async () => {
       try {
-        const departmentQuery = collection(firestore, "departments");
-        const departmentSnapshot = await getDocs(departmentQuery);
-        const deptData = departmentSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          name: doc.data().name,
-        }));
-        setDepartmentsList(deptData);
-      } catch (error) {
-        console.log("Error fetching departments: ", error);
+        const snap = await getDocs(collection(firestore, "departments"));
+        setDepartmentsList(
+          snap.docs.map((d) => ({
+            label: d.data().name,
+            value: d.id,
+          }))
+        );
+      } catch (e) {
+        console.error("Error fetching departments:", e);
       } finally {
         setLoadingDepartments(false);
       }
-    };
-    fetchDepartments();
+    })();
   }, []);
 
-  // Fetch programs when a department is selected and role is "CR/GR"
+  // Fetch programs only when CR/GR and department selected
   useEffect(() => {
-    const fetchPrograms = async () => {
-      if (!department) {
-        setProgramsList([]);
-        return;
-      }
-      setLoadingPrograms(true);
+    if (role !== "CR/GR" || department === "") {
+      setProgramsList([]);
+      return;
+    }
+    setLoadingPrograms(true);
+    (async () => {
       try {
-        const programQuery = query(
+        const q = query(
           collection(firestore, "programs"),
           where("departmentId", "==", department)
         );
-        const programSnapshot = await getDocs(programQuery);
-        const progData = programSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          name: doc.data().name,
-        }));
-        setProgramsList(progData);
-      } catch (error) {
-        console.log("Error fetching programs: ", error);
+        const snap = await getDocs(q);
+        setProgramsList(
+          snap.docs.map((d) => ({
+            label: d.data().name,
+            value: d.id,
+          }))
+        );
+      } catch (e) {
+        console.error("Error fetching programs:", e);
       } finally {
         setLoadingPrograms(false);
       }
-    };
-    if (role === "CR/GR") {
-      fetchPrograms();
-    }
+    })();
   }, [department, role]);
 
-  const handleSignUp = async () => {
-    setLoading(true);
-    // Collect required fields depending on role
-    const requiredFields = [name, email, registrationNumber, phoneNumber, campusName, gender, role];
-    if (role === "Principal") {
-      requiredFields.push(image);
-    } else if (role === "Faculty") {
-      requiredFields.push(FacultyType, designation, image, department);
-    } else if (role === "CR/GR") {
-      requiredFields.push(department, program, session, crgrSemester);
-    }
-
-    const phoneRegex = /^\+923\d{9}$/;
-    const sessionRegex = /^\d{4}-\d{4}$/;
-
-    if (!isConnected) {
-      Alert.alert("No Internet Connection", "Please check your internet connection.");
-      setLoading(false);
-      return;
-    }
-    if (requiredFields.includes("")) {
-      Alert.alert("Error", "Please fill in all required fields.");
-      setLoading(false);
-      return;
-    }
-    if (!email.endsWith("@gmail.com")) {
-      Alert.alert("Error", "Email must end with @gmail.com.");
-      setLoading(false);
-      return;
-    }
-    if (!phoneRegex.test(phoneNumber)) {
-      Alert.alert("Error", "Phone number must start with +923 and have 13 digits.");
-      setLoading(false);
-      return;
-    }
-    if (role === "CR/GR" && !sessionRegex.test(session)) {
-      Alert.alert("Error", "Session must be in the format YYYY-YYYY (e.g., 2021-2025).");
-      setLoading(false);
-      return;
-    }
-    try {
-      const auth = getAuth();
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      await updateProfile(user, { displayName: name });
-      await addData(user.uid);
-      Alert.alert("Sign Up Successful", `Welcome ${name}`);
-      resetForm();
-    } catch (error) {
-      console.log("Error signing up: ", error);
-      Alert.alert("Error", "Error signing up. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Reset form fields after successful sign up
-  const resetForm = () => {
-    setName("");
-    setEmail("");
-    setRole("");
-    setPhoneNumber("");
-    setRegistrationNumber("");
-    setDesignation("");
-    setDepartment("");
-    setCampusName("");
-    setProgram("");
-    setSession("");
-    setCrgrSemester("");
-    setPassword("");
-    setGender("");
-    setFacultyType("");
-    setImage(null);
-  };
-
-  const handleLogin = () => {
-    navigation.navigate("Login");
-  };
-
+  // Image picker
   const handleImagePick = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -200,51 +126,155 @@ const SignUpScreen = ({ navigation }) => {
     }
   };
 
-  // Save user data to Firestore
-  const addData = async (userId) => {
+  // Reset form
+  const resetForm = () => {
+    setName("");
+    setEmail("");
+    setRole("");
+    setPhoneNumber("");
+    setRegistrationNumber("");
+    setDesignation("");
+    setCampusName("");
+    setSession("");
+    setPassword("");
+    setGender("");
+    setFacultyType("");
+    setImage(null);
+    setDepartment("");
+    setProgram("");
+    setCrgrSemester("");
+  };
+
+  // Sign-up handler
+  const handleSignUp = async () => {
+    setLoading(true);
+
+    // 1️⃣ Check connectivity
+    if (!isConnected) {
+      Alert.alert("No Internet", "Please connect and try again.");
+      setLoading(false);
+      return;
+    }
+
+    // 2️⃣ Basic validation
+    if (
+      !name ||
+      !email ||
+      !registrationNumber ||
+      !phoneNumber ||
+      !campusName ||
+      !gender ||
+      !role ||
+      !password
+    ) {
+      Alert.alert("Missing fields", "Please fill all required fields.");
+      setLoading(false);
+      return;
+    }
+    if (!email.endsWith("@gmail.com")) {
+      Alert.alert("Invalid Email", "Must end with @gmail.com");
+      setLoading(false);
+      return;
+    }
+    if (!/^\+923\d{9}$/.test(phoneNumber)) {
+      Alert.alert("Invalid Phone", "Use +923 followed by 9 digits.");
+      setLoading(false);
+      return;
+    }
+    if (role === "CR/GR" && !/^\d{4}-\d{4}$/.test(session)) {
+      Alert.alert("Invalid Session", "Format: YYYY-YYYY");
+      setLoading(false);
+      return;
+    }
+
+    // 3️⃣ NEW: Check if this email already exists in "users" collection
     try {
-      const userDocRef = doc(firestore, "users", userId);
-      let imageUrl = "";
-      if (image) {
-        const imageRef = ref(storage, `images/${Date.now()}_${name}_profile.jpg`);
-        const img = await fetch(image);
-        const bytes = await img.blob();
-        await uploadBytes(imageRef, bytes);
+      const userQuery = query(
+        collection(firestore, "users"),
+        where("email", "==", email)
+      );
+      const userSnap = await getDocs(userQuery);
+      if (!userSnap.empty) {
+        Alert.alert(
+          "Email Taken",
+          "A user already exists with this email address."
+        );
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.error("Error checking existing users:", err);
+      // we can continue; or optionally bail out here:
+      setLoading(false);
+      Alert.alert("Error", "Could not verify email uniqueness.");
+      return;
+    }
+
+    // 4️⃣ Upload image if present
+    let imageUrl = "";
+    if (image) {
+      try {
+        const blob = await (await fetch(image)).blob();
+        const imageRef = ref(
+          storage,
+          `pending/${Date.now()}_${registrationNumber}.jpg`
+        );
+        await uploadBytes(imageRef, blob);
         imageUrl = await getDownloadURL(imageRef);
+      } catch (err) {
+        console.error("Image upload failed:", err);
+        Alert.alert("Upload Error", "Could not upload image.");
+        setLoading(false);
+        return;
       }
-      const userData = {
-        uid: userId,
-        name,
-        email,
-        registrationNumber,
-        phoneNumber,
-        campusName,
-        gender,
-        role,
-        password,
-      };
-      if (role === "Faculty") {
-        userData.FacultyType = FacultyType;
-        userData.department = department;
-        userData.designation = designation;
-        userData.imageUrl = imageUrl;
-      } else if (role === "Principal") {
-        userData.imageUrl = imageUrl;
-      } else if (role === "CR/GR") {
-        userData.department = department;
-        userData.program = program;
-        userData.session = session;
-        userData.semester = crgrSemester;
-      }
-      await setDoc(userDocRef, userData);
-    } catch (error) {
-      console.log("Error adding document: ", error);
-      Alert.alert("Error", "Failed to save data. Please try again.");
+    }
+
+    // 5️⃣ Build payload & submit to pendingRequests
+    const payload = {
+      name,
+      email,
+      registrationNumber,
+      phoneNumber,
+      campusName,
+      gender,
+      role,
+      imageUrl,
+      requestedAt: new Date().toISOString(),
+      password,
+      ...(role === "Faculty" && {
+        FacultyType,
+        designation,
+        department,
+      }),
+      ...(role === "CR/GR" && {
+        department,
+        program,
+        session,
+        semester: crgrSemester,
+      }),
+    };
+
+    try {
+      await setDoc(doc(firestore, "pendingRequests", email), payload);
+      Alert.alert(
+        "Request Sent",
+        "Your sign-up request is pending admin approval."
+      );
+      resetForm();
+    } catch (err) {
+      console.error("Sign-up error:", err);
+      Alert.alert("Error", err.message || "Could not send request.");
+    } finally {
+      setLoading(false);
     }
   };
 
   if (loading) {
-    return <LoadingScreen />;
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#08422d" />
+      </View>
+    );
   }
 
   return (
@@ -256,72 +286,66 @@ const SignUpScreen = ({ navigation }) => {
       >
         <ScrollView contentContainerStyle={styles.container}>
           <Text style={styles.title}>Sign Up</Text>
+
+          {/* Login link */}
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>Already have an account? </Text>
-            <TouchableOpacity onPress={handleLogin}>
+            <TouchableOpacity onPress={() => navigation.navigate("Login")}>
               <Text style={styles.loginLink}>Login</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Enter Name</Text>
-            <View style={styles.inputContainer}>
-              <Icon name="person" size={24} color="#08422d" style={styles.icon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Name"
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
-          </View>
-
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Enter Email</Text>
-            <View style={styles.inputContainer}>
-              <Icon name="email" size={24} color="#08422d" style={styles.icon} />
-              <TextInput
-                style={styles.input}
-                placeholder="University Assigned Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-          </View>
-
-          {/* Registration Number */}
-          <Text style={styles.label}>Registration Number</Text>
+          {/* --- Common Fields --- */}
+          <Text style={styles.label}>Name</Text>
           <View style={styles.inputContainer}>
-            <Icon name="assignment" size={24} color="#08422d" style={styles.icon} />
+            <Icon name="person" size={24} color="#08422d" />
             <TextInput
               style={styles.input}
-              placeholder="Registration Number"
+              placeholder="Full Name"
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
+
+          <Text style={styles.label}>Email</Text>
+          <View style={styles.inputContainer}>
+            <Icon name="email" size={24} color="#08422d" />
+            <TextInput
+              style={styles.input}
+              placeholder="you@gmail.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+          </View>
+
+          <Text style={styles.label}>Registration No.</Text>
+          <View style={styles.inputContainer}>
+            <Icon name="assignment" size={24} color="#08422d" />
+            <TextInput
+              style={styles.input}
+              placeholder="Reg#"
               value={registrationNumber}
               onChangeText={setRegistrationNumber}
             />
           </View>
 
-          {/* Phone Number */}
-          <Text style={styles.label}>Phone Number</Text>
+          <Text style={styles.label}>Phone</Text>
           <View style={styles.inputContainer}>
-            <Icon name="phone" size={24} color="#08422d" style={styles.icon} />
+            <Icon name="phone" size={24} color="#08422d" />
             <TextInput
               style={styles.input}
-              placeholder="Phone Number"
+              placeholder="+923XXXXXXXXX"
+              keyboardType="phone-pad"
               value={phoneNumber}
               onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
             />
           </View>
 
-          {/* Campus Name */}
-          <Text style={styles.label}>Campus Name</Text>
+          <Text style={styles.label}>Campus</Text>
           <View style={styles.inputContainer}>
-            <Icon name="location-city" size={24} color="#08422d" style={styles.icon} />
+            <Icon name="location-city" size={24} color="#08422d" />
             <TextInput
               style={styles.input}
               placeholder="Campus Name"
@@ -330,14 +354,13 @@ const SignUpScreen = ({ navigation }) => {
             />
           </View>
 
-          {/* Gender */}
           <Text style={styles.label}>Gender</Text>
           <View style={styles.inputContainer}>
-            <Icon name="people" size={24} color="#08422d" style={styles.icon} />
+            <Icon name="people" size={24} color="#08422d" />
             <Picker
               selectedValue={gender}
               style={styles.picker}
-              onValueChange={(itemValue) => setGender(itemValue)}
+              onValueChange={setGender}
             >
               <Picker.Item label="Select Gender" value="" />
               <Picker.Item label="Male" value="Male" />
@@ -346,69 +369,132 @@ const SignUpScreen = ({ navigation }) => {
             </Picker>
           </View>
 
-          {/* Role */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Select Role</Text>
-            <View style={styles.inputContainer}>
-              <Icon name="work" size={24} color="#08422d" style={styles.icon} />
-              <Picker
-                selectedValue={role}
-                style={styles.picker}
-                onValueChange={(itemValue) => setRole(itemValue)}
-              >
-                <Picker.Item label="Select Role" value="" />
-                <Picker.Item label="Principal" value="Principal" />
-                <Picker.Item label="Faculty" value="Faculty" />
-                <Picker.Item label="CR/GR" value="CR/GR" />
-              </Picker>
-            </View>
+          <Text style={styles.label}>Role</Text>
+          <View style={styles.inputContainer}>
+            <Icon name="work" size={24} color="#08422d" />
+            <Picker
+              selectedValue={role}
+              style={styles.picker}
+              onValueChange={setRole}
+            >
+              <Picker.Item label="Select Role" value="" />
+              <Picker.Item label="Principal" value="Principal" />
+              <Picker.Item label="Faculty" value="Faculty" />
+              <Picker.Item label="CR/GR" value="CR/GR" />
+            </Picker>
           </View>
 
-          {/* Role-specific Fields */}
+          {/* Principal image */}
           {role === "Principal" && (
-            <View style={styles.roleFields}>
+            <>
               <Text style={styles.label}>Upload Image</Text>
-              <TouchableOpacity style={styles.uploadButton} onPress={handleImagePick}>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={handleImagePick}
+              >
                 <Text style={styles.uploadButtonText}>
                   {image ? "Change Image" : "Upload Image"}
                 </Text>
               </TouchableOpacity>
-              {image && <Image source={{ uri: image }} style={styles.imagePreview} />}
-            </View>
+              {image && (
+                <Image source={{ uri: image }} style={styles.imagePreview} />
+              )}
+            </>
           )}
 
-          {role === "Faculty" && (
-            <View style={styles.roleFields}>
-              <Text style={styles.label}>Select Faculty Type</Text>
-              <View style={styles.inputContainer}>
-                <Picker
-                  selectedValue={FacultyType}
-                  style={styles.picker}
-                  onValueChange={(itemValue) => setFacultyType(itemValue)}
-                >
-                  <Picker.Item label="Select Faculty Type" value="" />
-                  <Picker.Item label="Visiting" value="Visiting" />
-                  <Picker.Item label="Permanent" value="Permanent" />
-                </Picker>
-              </View>
+          {/* Department dropdown for Faculty & CR/GR */}
+          {(role === "Faculty" || role === "CR/GR") && (
+            <>
               <Text style={styles.label}>Department</Text>
               {loadingDepartments ? (
-                <ActivityIndicator size="small" color="#08422d" />
+                <ActivityIndicator />
               ) : (
-                <Picker
-                  selectedValue={department}
-                  style={styles.picker}
-                  onValueChange={(itemValue) => setDepartment(itemValue)}
-                >
-                  <Picker.Item label="Select Department" value="" />
-                  {departmentsList.map((dept) => (
-                    <Picker.Item key={dept.id} label={dept.name} value={dept.id} />
-                  ))}
-                </Picker>
+                <DropDownPicker
+                  open={openDept}
+                  value={department}
+                  items={departmentsList}
+                  setOpen={setOpenDept}
+                  setValue={setDepartment}
+                  searchable={true}
+                  placeholder="Select Department..."
+                  listMode="MODAL"
+                  zIndex={3000}
+                  zIndexInverse={1000}
+                  style={styles.dropdown}
+                  dropDownContainerStyle={styles.dropdownContainer}
+                />
               )}
+            </>
+          )}
+
+          {/* Program & session/semester only for CR/GR */}
+          {role === "CR/GR" && (
+            <>
+              <Text style={styles.label}>Program</Text>
+              {loadingPrograms ? (
+                <ActivityIndicator />
+              ) : (
+                <DropDownPicker
+                  open={openProg}
+                  value={program}
+                  items={programsList}
+                  setOpen={setOpenProg}
+                  setValue={setProgram}
+                  searchable={true}
+                  placeholder="Select Program..."
+                  listMode="MODAL"
+                  disabled={!department}
+                  style={styles.dropdown}
+                  dropDownContainerStyle={styles.dropdownContainer}
+                />
+              )}
+
+              <Text style={styles.label}>Session</Text>
+              <View style={styles.inputContainer}>
+                <Icon name="date-range" size={24} color="#08422d" />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 2021-2025"
+                  value={session}
+                  onChangeText={setSession}
+                />
+              </View>
+
+              <Text style={styles.label}>Semester</Text>
+              <Picker
+                selectedValue={crgrSemester}
+                style={styles.picker}
+                onValueChange={setCrgrSemester}
+              >
+                <Picker.Item label="Select Sem." value="" />
+                {[...Array(8)].map((_, i) => (
+                  <Picker.Item
+                    key={i + 1}
+                    label={`Semester ${i + 1}`}
+                    value={`${i + 1}`}
+                  />
+                ))}
+              </Picker>
+            </>
+          )}
+
+          {/* Faculty-only fields */}
+          {role === "Faculty" && (
+            <>
+              <Text style={styles.label}>Faculty Type</Text>
+              <Picker
+                selectedValue={FacultyType}
+                style={styles.picker}
+                onValueChange={setFacultyType}
+              >
+                <Picker.Item label="Select Type" value="" />
+                <Picker.Item label="Visiting" value="Visiting" />
+                <Picker.Item label="Permanent" value="Permanent" />
+              </Picker>
+
               <Text style={styles.label}>Designation</Text>
               <View style={styles.inputContainer}>
-                <Icon name="work" size={24} color="#08422d" style={styles.icon} />
+                <Icon name="work" size={24} color="#08422d" />
                 <TextInput
                   style={styles.input}
                   placeholder="Designation"
@@ -416,93 +502,40 @@ const SignUpScreen = ({ navigation }) => {
                   onChangeText={setDesignation}
                 />
               </View>
+
               <Text style={styles.label}>Upload Image</Text>
-              <TouchableOpacity style={styles.uploadButton} onPress={handleImagePick}>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={handleImagePick}
+              >
                 <Text style={styles.uploadButtonText}>
                   {image ? "Change Image" : "Upload Image"}
                 </Text>
               </TouchableOpacity>
-              {image && <Image source={{ uri: image }} style={styles.imagePreview} />}
-            </View>
+              {image && (
+                <Image source={{ uri: image }} style={styles.imagePreview} />
+              )}
+            </>
           )}
 
-          {role === "CR/GR" && (
-            <View style={styles.roleFields}>
-              <Text style={styles.label}>Department</Text>
-              {loadingDepartments ? (
-                <ActivityIndicator size="small" color="#08422d" />
-              ) : (
-                <Picker
-                  selectedValue={department}
-                  style={styles.picker}
-                  onValueChange={(itemValue) => setDepartment(itemValue)}
-                >
-                  <Picker.Item label="Select Department" value="" />
-                  {departmentsList.map((dept) => (
-                    <Picker.Item key={dept.id} label={dept.name} value={dept.id} />
-                  ))}
-                </Picker>
-              )}
-              <Text style={styles.label}>Program</Text>
-              {loadingPrograms ? (
-                <ActivityIndicator size="small" color="#08422d" />
-              ) : (
-                <Picker
-                  selectedValue={program}
-                  style={styles.picker}
-                  onValueChange={(itemValue) => setProgram(itemValue)}
-                >
-                  <Picker.Item label="Select Program" value="" />
-                  {programsList.map((prog) => (
-                    <Picker.Item key={prog.id} label={prog.name} value={prog.id} />
-                  ))}
-                </Picker>
-              )}
-              <Text style={styles.label}>Session</Text>
-              <View style={styles.inputContainer}>
-                <Icon name="date-range" size={24} color="#08422d" style={styles.icon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Session (e.g., 2021-2025)"
-                  value={session}
-                  onChangeText={setSession}
-                />
-              </View>
-              <Text style={styles.label}>Semester</Text>
-              <Picker
-                selectedValue={crgrSemester}
-                style={styles.picker}
-                onValueChange={(itemValue) => setCrgrSemester(itemValue)}
-              >
-                <Picker.Item label="Select Semester" value="" />
-                {[...Array(8).keys()].map((num) => (
-                  <Picker.Item
-                    key={num + 1}
-                    label={`Semester ${num + 1}`}
-                    value={(num + 1).toString()}
-                  />
-                ))}
-              </Picker>
-            </View>
-          )}
-
-          {/* Password */}
-          <Text style={styles.label}>Enter Password</Text>
+          {/* Password & submit */}
+          <Text style={styles.label}>Password</Text>
           <View style={styles.inputContainer}>
-            <Icon name="lock" size={24} color="#08422d" style={styles.icon} />
+            <Icon name="lock" size={24} color="#08422d" />
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder="••••••••"
+              secureTextEntry={!isPasswordVisible}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry={!isPasswordVisible}
             />
-            <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+            <TouchableOpacity
+              onPress={() => setIsPasswordVisible((v) => !v)}
+            >
               <Icon
                 name={isPasswordVisible ? "visibility-off" : "visibility"}
                 size={24}
                 color="#08422d"
-                style={styles.icon}
               />
             </TouchableOpacity>
           </View>
@@ -517,31 +550,29 @@ const SignUpScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
-  container: {
-    padding: 20,
-  },
+  safeArea: { flex: 1 },
+  background: { flex: 1 },
+  container: { padding: 20 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
     color: "#08422d",
-    marginBottom: 10,
-    marginTop: 5,
+    marginVertical: 10,
   },
-  inputGroup: {
-    marginBottom: 15,
+  loginContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 20,
   },
-  label: {
-    fontSize: 16,
-    marginBottom: 5,
-    color: "#08422d",
+  loginText: { color: "#000" },
+  loginLink: {
+    color: "red",
+    textDecorationLine: "underline",
+    fontWeight: "bold",
   },
+  label: { fontSize: 16, color: "#08422d", marginTop: 12 },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -549,63 +580,34 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: 5,
     paddingHorizontal: 10,
+    marginTop: 4,
   },
-  input: {
-    flex: 1,
-    height: 40,
-    marginLeft: 5,
-    color: "#08422d",
+  input: { flex: 1, height: 40, marginLeft: 5, color: "#08422d" },
+  picker: { flex: 1, height: 40 },
+  dropdown: { borderColor: "#ccc", height: 50 },
+  dropdownContainer: { borderColor: "#ccc", maxHeight: 200 },
+  uploadButton: {
+    backgroundColor: "#08422d",
+    padding: 10,
+    borderRadius: 5,
+    alignItems: "center",
+    marginVertical: 8,
   },
-  picker: {
-    height: 40,
-    width: "100%",
-  },
-  roleFields: {
-    marginVertical: 15,
+  uploadButtonText: { color: "#fff" },
+  imagePreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    marginTop: 8,
   },
   button: {
     backgroundColor: "#08422d",
     padding: 15,
     borderRadius: 5,
     alignItems: "center",
-    marginTop: 10,
+    marginVertical: 20,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  loginContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 20,
-  },
-  loginText: {
-    color: "#000",
-  },
-  loginLink: {
-    textDecorationLine: "underline",
-    color: "red",
-    fontWeight: "bold",
-  },
-  icon: {
-    marginRight: 5,
-  },
-  uploadButton: {
-    backgroundColor: "#08422d",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    marginVertical: 10,
-  },
-  uploadButtonText: {
-    color: "#fff",
-  },
-  imagePreview: {
-    width: 100,
-    height: 100,
-    marginVertical: 10,
-    borderRadius: 10,
-  },
+  buttonText: { color: "#fff", fontSize: 16 },
 });
 
 export default SignUpScreen;
